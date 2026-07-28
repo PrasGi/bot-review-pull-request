@@ -23,7 +23,9 @@ const envSchema = z.object({
   // Optional in env: providers may instead be configured (encrypted) via the
   // dashboard settings. Presence is enforced at review time, not at boot.
   GLM_API_KEY: z.string().optional(),
+  GLM_BASE_URL: z.string().default("https://api.z.ai/api/paas/v4/"),
   KIMI_API_KEY: z.string().optional(),
+  KIMI_BASE_URL: z.string().default("https://api.moonshot.ai/v1"),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
 

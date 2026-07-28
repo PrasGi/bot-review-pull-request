@@ -1051,7 +1051,7 @@ Centered glass card (max-w-sm) on gradient page bg: logo, email + password field
 - [ ] Webhook per-IP token bucket (sig failures ×10)
 - [ ] Unit tests: signature verify, trigger matrix table-driven cases
 
-### Phase 2 — Review Engine (Flow F3) `[ ]`
+### Phase 2 — Review Engine (Flow F3) `[x]`
 - [ ] GitHub client: user-token decrypt + auto-refresh at use, PR fetch + paginated files, compare API, review submit (+422 fallback), rate-limit-aware retries (F5 transient rules)
 - [ ] Filter (built-in lists + repo globs, exclusions recorded) → prioritize → token estimate → chunk packer (budget math §3.3 step 4)
 - [ ] `lib/ai`: provider interface + 4 impls (anthropic SDK; openai SDK ×3 with baseURLs api.openai.com / api.z.ai/v1 / api.moonshot.ai/v1); normalized usage+cost (pricing from settings)

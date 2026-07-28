@@ -1,23 +1,15 @@
 import type { ObjectId } from "mongodb";
 import { reviewRequestsCollection } from "@/lib/db/collections";
+import type { ReviewRequestDoc } from "@/lib/db/types";
+import { runReviewPipeline } from "@/lib/review/pipeline";
 
-const WALL_CLOCK_BUDGET_MS = 240_000;
-
-async function claim(requestId: ObjectId): Promise<boolean> {
+async function claim(requestId: ObjectId): Promise<ReviewRequestDoc | null> {
   const requests = await reviewRequestsCollection();
   const now = new Date();
-  const result = await requests.updateOne(
+  return requests.findOneAndUpdate(
     { _id: requestId, status: "queued" },
     { $set: { status: "processing", startedAt: now, heartbeatAt: now } },
-  );
-  return result.modifiedCount === 1;
-}
-
-async function heartbeat(requestId: ObjectId): Promise<void> {
-  const requests = await reviewRequestsCollection();
-  await requests.updateOne(
-    { _id: requestId, status: "processing" },
-    { $set: { heartbeatAt: new Date() } },
+    { returnDocument: "after" },
   );
 }
 
@@ -47,18 +39,20 @@ async function markFailed(
   );
 }
 
-// Phase 1 stub: claims the request, heartbeats, and completes. The real review
-// pipeline (fetch PR, filter, chunk, AI, submit) lands in Phase 2 (F3/F4).
 export async function runReviewRequest(requestId: ObjectId): Promise<void> {
-  const claimed = await claim(requestId);
-  if (!claimed) return;
+  const request = await claim(requestId);
+  if (!request) return;
 
-  const startedAt = Date.now();
+  const heartbeat = async (): Promise<void> => {
+    const requests = await reviewRequestsCollection();
+    await requests.updateOne(
+      { _id: requestId, status: "processing" },
+      { $set: { heartbeatAt: new Date() } },
+    );
+  };
+
   try {
-    await heartbeat(requestId);
-    if (Date.now() - startedAt > WALL_CLOCK_BUDGET_MS) {
-      throw new Error("wall_clock_budget_exceeded");
-    }
+    await runReviewPipeline(request, heartbeat);
     await markCompleted(requestId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
