@@ -114,7 +114,6 @@ export async function runReviewPipeline(
       summary: "No reviewable code changes (only lockfiles/generated files).",
       newerCommits: request.newerCommitsFlag ?? false,
       shortSha: pr.headSha.slice(0, 7),
-      model,
     });
     const result = await submitReview(token, {
       owner,
@@ -256,7 +255,6 @@ export async function runReviewPipeline(
     caveat: resolution.caveat,
     newerCommits: request.newerCommitsFlag ?? false,
     shortSha: pr.headSha.slice(0, 7),
-    model,
   });
 
   const inlineComments: InlineComment[] = findingsOut.map((f) => ({

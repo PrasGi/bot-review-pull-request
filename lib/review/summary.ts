@@ -12,7 +12,6 @@ export interface SummaryInput {
   caveat?: string;
   newerCommits: boolean;
   shortSha: string;
-  model: string;
 }
 
 export function buildReviewBody(input: SummaryInput): string {
@@ -33,6 +32,5 @@ export function buildReviewBody(input: SummaryInput): string {
     );
   }
 
-  parts.push("", `<sub>${input.model}</sub>`);
   return parts.join("\n");
 }
