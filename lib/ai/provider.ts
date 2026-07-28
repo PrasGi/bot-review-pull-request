@@ -19,6 +19,7 @@ export interface AICompletionParams {
   model: string;
   messages: AIMessage[];
   maxTokens: number;
+  timeoutMs?: number;
 }
 
 export interface AIProvider {

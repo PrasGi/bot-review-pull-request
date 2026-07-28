@@ -76,6 +76,34 @@ export interface UserPromptInput {
   filesInChunk: number;
   filesTotal: number;
   formattedDiff: string;
+  previousFindings?: PreviousFindingLine[];
+}
+
+export interface PreviousFindingLine {
+  path: string;
+  line: number;
+  severity: string;
+  blocking: boolean;
+  comment: string;
+}
+
+const PREV_FINDINGS_MAX = 20;
+
+function renderPreviousFindings(findings: PreviousFindingLine[]): string {
+  const list = findings
+    .slice(0, PREV_FINDINGS_MAX)
+    .map(
+      (f) =>
+        `- ${f.path}:${f.line} [${f.severity}${f.blocking ? "/blocking" : ""}] ${f.comment.slice(0, 120)}`,
+    )
+    .join("\n");
+  return [
+    "YOUR PREVIOUS FINDINGS on this PR:",
+    list,
+    "",
+    "The diff below is ONLY the code that changed since your last review. Do NOT repeat a previous finding if the change addresses it or the surrounding code is unchanged. Re-raise a previous finding only if the relevant code changed but is still not fixed. Also review the new diff for genuinely new issues.",
+    "",
+  ].join("\n");
 }
 
 export function buildUserPrompt(input: UserPromptInput): string {
@@ -84,6 +112,10 @@ export function buildUserPrompt(input: UserPromptInput): string {
     .slice(0, COMMIT_LINES_MAX)
     .map((m) => `- ${sanitizeUntrusted(m)}`)
     .join("\n");
+  const prevBlock =
+    input.previousFindings && input.previousFindings.length > 0
+      ? renderPreviousFindings(input.previousFindings)
+      : "";
 
   return [
     "<pr_data>",
@@ -99,6 +131,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
     "",
     `This is chunk ${input.chunkIndex} of ${input.chunkTotal} (${input.filesInChunk} files; ${input.filesTotal} reviewable files in the whole PR).`,
     "",
+    prevBlock,
     "<pr_data>",
     input.formattedDiff,
     "</pr_data>",

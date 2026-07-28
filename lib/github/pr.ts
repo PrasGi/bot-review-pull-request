@@ -30,6 +30,8 @@ interface CommitApiResponse {
   commit: { message: string };
 }
 
+const GH_TIMEOUT_MS = 15_000;
+
 async function ghRequest<T>(
   path: string,
   token: string,
@@ -37,6 +39,7 @@ async function ghRequest<T>(
 ): Promise<{ ok: true; data: T } | { ok: false; status: number; body: string }> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
+    signal: AbortSignal.timeout(GH_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",
@@ -93,6 +96,7 @@ export async function fetchPullRequestFiles(
   prNumber: number,
 ): Promise<PrFile[]> {
   const files: PrFile[] = [];
+  const MAX_PAGES = 3;
   let page = 1;
   for (;;) {
     const result = await ghRequest<PrFile[]>(
@@ -101,7 +105,7 @@ export async function fetchPullRequestFiles(
     );
     if (!result.ok) throw new Error(`fetch PR files failed: ${result.status}`);
     files.push(...result.data);
-    if (result.data.length < 100) break;
+    if (result.data.length < 100 || page >= MAX_PAGES) break;
     page += 1;
   }
   return files;

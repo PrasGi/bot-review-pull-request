@@ -1061,7 +1061,15 @@ Centered glass card (max-w-sm) on gradient page bg: logo, email + password field
 - [ ] Full audit persistence (reviews, ai_calls with full prompt/response)
 - [ ] E2E on a real test repo: open PR → request review → bot reviews as owner account ✅
 
-### Phase 3 — Re-Review (Flow F4) + Failure UX (F5) `[ ]`
+### Phase 3 — Re-Review (Flow F4) + Failure UX (F5) `[x]`
+> Done + latency-optimized. Hard contract: webhook→submitted ≤180s for ANY PR.
+> Key fixes: default model glm-4.6 (2× faster than 4.7); chunks capped 4k tokens /
+> 24k total budget, run 3-parallel; **oversized-file patch truncation** (root cause of
+> earlier 44k-token / 10-min hangs); 60s per-call cutoff → straggler dropped with a
+> "partial review" disclosure; conservative token estimate (÷3); GitHub calls 15s
+> timeout; SDK maxRetries 0; retry-once on empty completion. Re-review uses GitHub
+> compare delta + previous-findings context; verdict resolution unchanged (blocking
+> model); empty delta → silent noop. Live PR#53 (org, 45 files): ~83s.
 - [ ] Kind detection, previous-review load, compare-API delta (force-push fallback)
 - [ ] Re-review prompt (resolved/unresolved/new) + verdict upgrade rules + chain persistence
 - [ ] Manual retry endpoint (clone-as-new, current head SHA)

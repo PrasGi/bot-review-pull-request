@@ -17,15 +17,19 @@ interface OpenAICompatibleOptions {
 export function createOpenAICompatibleProvider(
   options: OpenAICompatibleOptions,
 ): AIProvider {
+  // maxRetries 0: the SDK's default (2) silently multiplies a timed-out call's
+  // latency by 3x. Retry policy is owned by the pipeline, not the transport.
   const client = new OpenAI({
     apiKey: options.apiKey,
     baseURL: options.baseURL,
+    maxRetries: 0,
   });
 
-  return {
-    name: options.name,
-    async complete(params: AICompletionParams): Promise<AICompletion> {
-      const response = await client.chat.completions.create({
+  const callOnce = async (
+    params: AICompletionParams,
+  ): Promise<AICompletion> => {
+    const response = await client.chat.completions.create(
+      {
         model: params.model,
         messages: params.messages,
         max_tokens: params.maxTokens,
@@ -35,19 +39,40 @@ export function createOpenAICompatibleProvider(
         ...(options.deterministicExtraBody
           ? { extra_body: options.deterministicExtraBody }
           : {}),
-      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+      } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
+      params.timeoutMs ? { timeout: params.timeoutMs } : undefined,
+    );
 
-      const choice = response.choices[0];
-      const content = choice?.message?.content;
-      if (!content) throw new Error(`${options.name}: empty completion`);
+    const choice = response.choices[0];
+    const content = choice?.message?.content;
+    if (!content) {
+      const reason = choice?.finish_reason ?? "unknown";
+      throw new Error(
+        `${options.name}: empty completion (finish_reason=${reason})`,
+      );
+    }
 
-      return {
-        text: stripJsonFences(content),
-        usage: {
-          promptTokens: response.usage?.prompt_tokens ?? 0,
-          completionTokens: response.usage?.completion_tokens ?? 0,
-        },
-      };
+    return {
+      text: stripJsonFences(content),
+      usage: {
+        promptTokens: response.usage?.prompt_tokens ?? 0,
+        completionTokens: response.usage?.completion_tokens ?? 0,
+      },
+    };
+  };
+
+  return {
+    name: options.name,
+    async complete(params: AICompletionParams): Promise<AICompletion> {
+      try {
+        return await callOnce(params);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "";
+        if (msg.includes("empty completion")) {
+          return callOnce(params);
+        }
+        throw error;
+      }
     },
   };
 }

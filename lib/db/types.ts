@@ -171,6 +171,11 @@ export type VerdictForcedReason =
   | "critical_findings"
   | "intent_mismatch";
 
+export type ReviewDocKind =
+  | "initial"
+  | "re_review"
+  | "re_review_fallback_full";
+
 export interface ReviewDoc {
   _id: ObjectId;
   requestId: ObjectId;
@@ -182,11 +187,11 @@ export interface ReviewDoc {
   summary: string;
   intentMatch: IntentMatch;
   findings: Finding[];
-  resolvedFindings?: PreviousFindingStatus[];
-  unresolvedFindings?: PreviousFindingStatus[];
+  reviewKind?: ReviewDocKind;
+  noop?: boolean;
   lastReviewedSha: string;
   previousReviewId?: ObjectId;
-  githubReviewId: number;
+  githubReviewId?: number;
   submittedAt: Date;
 }
 

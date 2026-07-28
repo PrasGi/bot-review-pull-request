@@ -6,6 +6,7 @@ import { encrypt } from "@/lib/crypto";
 import type { ModelPricing, SettingsDoc } from "@/lib/db/types";
 
 const DEFAULT_PRICING: ModelPricing[] = [
+  { provider: "glm", model: "glm-4.6", inputPerM: 0.6, outputPerM: 2.2, updatedAt: new Date() },
   { provider: "glm", model: "glm-4.7", inputPerM: 0.6, outputPerM: 2.2, updatedAt: new Date() },
   { provider: "glm", model: "glm-4.5-air", inputPerM: 0.2, outputPerM: 1.1, updatedAt: new Date() },
   { provider: "glm", model: "glm-5.2", inputPerM: 1.4, outputPerM: 4.4, updatedAt: new Date() },
@@ -38,7 +39,7 @@ async function main(): Promise<void> {
     adminEmail,
     adminPasswordHash,
     defaultProvider: "glm",
-    defaultModel: "glm-4.7",
+    defaultModel: "glm-4.6",
     defaultReviewProfile: "normal",
     providerKeys: existing?.providerKeys ?? providerKeys,
     modelPricing: existing?.modelPricing ?? DEFAULT_PRICING,
