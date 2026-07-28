@@ -6,7 +6,13 @@ declare global {
 }
 
 function createClientPromise(): Promise<MongoClient> {
-  const client = new MongoClient(getEnv().MONGODB_URI);
+  const client = new MongoClient(getEnv().MONGODB_URI, {
+    maxPoolSize: 10,
+    minPoolSize: 0,
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
+  });
   return client.connect();
 }
 

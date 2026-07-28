@@ -8,6 +8,7 @@ import { encrypt } from "@/lib/crypto";
 import type { GitHubTokenSet } from "@/lib/github/oauth";
 import {
   fetchAuthenticatedUser,
+  fetchUserInstallations,
   fetchInstallationRepos,
   type GitHubRepo,
 } from "@/lib/github/api";
@@ -53,13 +54,38 @@ async function upsertRepos(
   }
 }
 
-export async function connectAccount(tokens: GitHubTokenSet): Promise<{
+async function resolveInstallationId(
+  accessToken: string,
+  userId: number,
+  hint: number | null,
+): Promise<number> {
+  const installations = await fetchUserInstallations(accessToken);
+  if (hint && installations.some((i) => i.id === hint)) return hint;
+  const own = installations.find((i) => i.account?.id === userId);
+  if (own) return own.id;
+  const first = installations[0];
+  if (first) return first.id;
+  throw new Error("No installation found for this user");
+}
+
+export async function connectAccount(
+  tokens: GitHubTokenSet,
+  installationIdHint: number | null,
+): Promise<{
   accountId: ObjectId;
   githubLogin: string;
   repoCount: number;
 }> {
   const user = await fetchAuthenticatedUser(tokens.accessToken);
-  const { selection, repos } = await fetchInstallationRepos(tokens.accessToken);
+  const installationId = await resolveInstallationId(
+    tokens.accessToken,
+    user.id,
+    installationIdHint,
+  );
+  const { selection, repos } = await fetchInstallationRepos(
+    tokens.accessToken,
+    installationId,
+  );
 
   const accounts = await accountsCollection();
   const now = new Date();
@@ -71,6 +97,7 @@ export async function connectAccount(tokens: GitHubTokenSet): Promise<{
         githubUserId: user.id,
         displayName: user.name ?? user.login,
         avatarUrl: user.avatar_url,
+        installationId,
         userTokenEncrypted: encrypt(tokens.accessToken),
         tokenExpiresAt: tokens.accessTokenExpiresAt,
         refreshTokenEncrypted: encrypt(tokens.refreshToken),

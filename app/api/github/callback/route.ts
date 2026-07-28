@@ -18,20 +18,34 @@ function redirectToProjects(params: Record<string, string>): NextResponse {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const code = request.nextUrl.searchParams.get("code");
-  const state = request.nextUrl.searchParams.get("state");
+  const params = request.nextUrl.searchParams;
+  const code = params.get("code");
+  const state = params.get("state");
+  const installationIdRaw = params.get("installation_id");
+  const installationIdHint = installationIdRaw
+    ? Number.parseInt(installationIdRaw, 10)
+    : null;
 
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
   cookieStore.delete(OAUTH_STATE_COOKIE);
 
-  if (!code || !state || !expectedState || !safeEqual(state, expectedState)) {
-    return redirectToProjects({ connect: "error", reason: "invalid_state" });
+  if (!code) {
+    return redirectToProjects({ connect: "error", reason: "missing_code" });
+  }
+  if (!state || !expectedState) {
+    return redirectToProjects({ connect: "error", reason: "missing_state" });
+  }
+  if (!safeEqual(state, expectedState)) {
+    return redirectToProjects({ connect: "error", reason: "state_mismatch" });
   }
 
   try {
     const tokens = await exchangeCodeForTokens(code);
-    const { githubLogin, repoCount } = await connectAccount(tokens);
+    const { githubLogin, repoCount } = await connectAccount(
+      tokens,
+      installationIdHint,
+    );
     return redirectToProjects({
       connect: "success",
       login: githubLogin,

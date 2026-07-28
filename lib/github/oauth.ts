@@ -61,19 +61,22 @@ async function postToken(
   return toTokenSet(data);
 }
 
-export function buildInstallUrl(state: string): string {
+export function buildAuthorizeUrl(state: string): string {
   const env = getEnv();
-  const url = new URL(
-    `https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`,
-  );
+  const url = new URL("https://github.com/login/oauth/authorize");
+  url.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
   url.searchParams.set("state", state);
+  url.searchParams.set("redirect_uri", `${env.APP_URL}/api/github/callback`);
   return url.toString();
 }
 
 export async function exchangeCodeForTokens(
   code: string,
 ): Promise<GitHubTokenSet> {
-  return postToken({ code, grant_type: "authorization_code" });
+  return postToken({
+    code,
+    redirect_uri: `${getEnv().APP_URL}/api/github/callback`,
+  });
 }
 
 export async function refreshTokens(

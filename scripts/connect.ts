@@ -1,21 +1,15 @@
-import { randomBytes } from "node:crypto";
 import { getEnv } from "@/lib/env";
-import { buildInstallUrl } from "@/lib/github/oauth";
 import { accountsCollection } from "@/lib/db/collections";
 
 async function main(): Promise<void> {
   const env = getEnv();
-  const state = randomBytes(32).toString("hex");
-  const url = buildInstallUrl(state);
 
   process.stdout.write(
-    "\nOpen this URL, pick the account + repositories, and approve:\n\n" +
-      `  ${url}\n\n` +
-      "The OAuth callback runs in your deployed app at:\n" +
-      `  ${env.APP_URL}/api/github/callback\n\n` +
-      "Note: the CLI cannot receive the browser redirect. Use the deployed\n" +
-      "callback (or a local tunnel) so the account is stored, then re-run this\n" +
-      "script with --verify to confirm.\n\n",
+    "\nOpen this URL in a browser, pick the account + repositories, approve:\n\n" +
+      `  ${env.APP_URL}/api/github/connect\n\n` +
+      "This endpoint sets the CSRF state cookie and redirects through GitHub's\n" +
+      "authorize flow. After approving, the account is stored automatically.\n" +
+      "Re-run with --verify to confirm.\n\n",
   );
 
   if (process.argv.includes("--verify")) {

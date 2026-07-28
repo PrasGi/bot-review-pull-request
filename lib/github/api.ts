@@ -18,6 +18,16 @@ interface InstallationReposResponse {
   repositories: GitHubRepo[];
 }
 
+export interface GitHubInstallation {
+  id: number;
+  account: { login: string; id: number } | null;
+}
+
+interface UserInstallationsResponse {
+  total_count: number;
+  installations: GitHubInstallation[];
+}
+
 async function githubGet<T>(path: string, accessToken: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -38,8 +48,19 @@ export async function fetchAuthenticatedUser(
   return githubGet<GitHubUser>("/user", accessToken);
 }
 
+export async function fetchUserInstallations(
+  accessToken: string,
+): Promise<GitHubInstallation[]> {
+  const data = await githubGet<UserInstallationsResponse>(
+    "/user/installations?per_page=100",
+    accessToken,
+  );
+  return data.installations;
+}
+
 export async function fetchInstallationRepos(
   accessToken: string,
+  installationId: number,
 ): Promise<{
   selection: "all" | "selected";
   repos: GitHubRepo[];
@@ -49,7 +70,7 @@ export async function fetchInstallationRepos(
   let selection: "all" | "selected" = "selected";
   for (;;) {
     const data = await githubGet<InstallationReposResponse>(
-      `/user/installations/repositories?per_page=100&page=${page}`,
+      `/user/installations/${installationId}/repositories?per_page=100&page=${page}`,
       accessToken,
     );
     selection = data.repository_selection;
