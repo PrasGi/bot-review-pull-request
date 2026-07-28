@@ -7,6 +7,7 @@ import {
   aiCallsCollection,
   usageDailyCollection,
   processedWebhooksCollection,
+  sessionsCollection,
 } from "@/lib/db/collections";
 
 export async function ensureIndexes(): Promise<void> {
@@ -68,5 +69,10 @@ export async function ensureIndexes(): Promise<void> {
   const processedWebhooks = await processedWebhooksCollection();
   await processedWebhooks.createIndexes([
     { key: { expiresAt: 1 }, expireAfterSeconds: 0, name: "ttl_dedupe" },
+  ]);
+
+  const sessions = await sessionsCollection();
+  await sessions.createIndexes([
+    { key: { expiresAt: 1 }, expireAfterSeconds: 0, name: "ttl_session" },
   ]);
 }

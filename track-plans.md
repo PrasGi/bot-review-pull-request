@@ -1075,7 +1075,15 @@ Centered glass card (max-w-sm) on gradient page bg: logo, email + password field
 - [ ] Manual retry endpoint (clone-as-new, current head SHA)
 - [ ] 401 → refresh-once-then-reconnectRequired handling (F5)
 
-### Phase 4 — Dashboard Backend `[ ]`
+### Phase 4 — Dashboard Backend `[x]`
+> Auth (argon2id verify, sha256-hashed session tokens, httpOnly SameSite=Lax cookie,
+> 7d TTL, login rate-limit 5/15min), `proxy.ts` gate (Next 16 renamed middleware→proxy;
+> Edge presence-check only, real validation in handlers via guard() + Origin CSRF).
+> Endpoints: auth login/logout/session; /api/dashboard stats (KPIs + charts aggs),
+> requests (filter/search/paginate + detail w/ gunzipped prompts + retry clone-as-new),
+> usage (group-by model/repo/day + CSV), accounts (list/disconnect + connect/manage URLs),
+> repos (list + enable/config PATCH), settings (masked keys, pricing, defaults).
+> Shared zod schemas in lib/schemas. 68 unit tests. Auth flow verified live.
 - [ ] Auth: login/logout/session (argon2id, httpOnly cookie, rolling 7d, rate limit), middleware gate
 - [ ] REST endpoints: stats (KPIs, charts aggregations), requests list (filters/search/pagination) + detail + retry, usage aggregations (group-by model/repo/day) + CSV, accounts (list, disconnect, reconnect-URL), repos (list, enable/disable, config update incl. reviewProfile), settings (keys masked, pricing table, prompt templates)
 - [ ] Shared zod schemas (client+server) in `lib/schemas`
