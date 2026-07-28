@@ -1,5 +1,5 @@
 import { getEnv } from "@/lib/env";
-import { accountsCollection } from "@/lib/db/collections";
+import { userConnectionsCollection } from "@/lib/db/collections";
 
 async function main(): Promise<void> {
   const env = getEnv();
@@ -13,14 +13,16 @@ async function main(): Promise<void> {
   );
 
   if (process.argv.includes("--verify")) {
-    const accounts = await accountsCollection();
-    const count = await accounts.countDocuments();
-    process.stdout.write(`Connected accounts in DB: ${count}\n`);
-    const list = await accounts
-      .find({}, { projection: { githubLogin: 1, installationId: 1 } })
+    const connections = await userConnectionsCollection();
+    const count = await connections.countDocuments();
+    process.stdout.write(`Connected users in DB: ${count}\n`);
+    const list = await connections
+      .find({}, { projection: { githubLogin: 1, installationIds: 1 } })
       .toArray();
-    for (const acc of list) {
-      process.stdout.write(`  - @${acc.githubLogin}\n`);
+    for (const conn of list) {
+      process.stdout.write(
+        `  - @${conn.githubLogin} (installations: ${conn.installationIds.join(", ")})\n`,
+      );
     }
   }
 

@@ -1,5 +1,5 @@
 import { reviewRequestsCollection } from "@/lib/db/collections";
-import { resolveTenant } from "@/lib/webhook/tenant";
+import { resolveRepo, resolveReviewTenant } from "@/lib/webhook/tenant";
 import { enqueueReviewRequest } from "@/lib/review/enqueue";
 import type { PullRequestEvent } from "@/lib/webhook/payloads";
 import type { ObjectId } from "mongodb";
@@ -55,59 +55,76 @@ export async function evaluatePullRequestEvent(
 ): Promise<TriggerOutcome> {
   const { action, repository, pull_request: pr } = payload;
   const installationId = payload.installation?.id;
-
-  const tenant = await resolveTenant(installationId, repository.full_name);
-  if (!tenant.ok) return { status: "ignored", reason: tenant.reason };
-  const { account, repo } = tenant;
+  const reviewerId = payload.requested_reviewer?.id;
 
   switch (action) {
     case "review_requested": {
-      const reviewerId = payload.requested_reviewer?.id;
-      if (reviewerId !== account.githubUserId) {
-        return { status: "ignored", reason: "reviewer_mismatch" };
-      }
-      const result = await enqueueReviewRequest({
-        account,
-        repo,
+      const tenant = await resolveReviewTenant(
+        installationId,
+        repository.full_name,
+        reviewerId,
+      );
+      if (!tenant.ok) return { status: "ignored", reason: tenant.reason };
+      return enqueueReviewRequest({
+        installation: tenant.installation,
+        reviewer: tenant.reviewer,
+        repo: tenant.repo,
         pr,
         deliveryId,
         trigger: "review_requested",
         draftSkip: pr.draft,
       });
-      return result;
     }
 
     case "ready_for_review": {
-      if (!(await hasSkippedDraft(repo._id, pr.number))) {
+      const tenant = await resolveReviewTenant(
+        installationId,
+        repository.full_name,
+        reviewerId,
+      );
+      if (!tenant.ok) return { status: "ignored", reason: tenant.reason };
+      if (!(await hasSkippedDraft(tenant.repo._id, pr.number))) {
         return { status: "ignored", reason: "no_prior_draft_skip" };
       }
-      const result = await enqueueReviewRequest({
-        account,
-        repo,
+      return enqueueReviewRequest({
+        installation: tenant.installation,
+        reviewer: tenant.reviewer,
+        repo: tenant.repo,
         pr,
         deliveryId,
         trigger: "ready_for_review",
         draftSkip: false,
       });
-      return result;
     }
 
     case "synchronize": {
-      const flagged = await flagNewerCommits(repo._id, pr.number);
+      const repoResult = await resolveRepo(installationId, repository.full_name);
+      if (!repoResult.ok) {
+        return { status: "ignored", reason: repoResult.reason };
+      }
+      const flagged = await flagNewerCommits(repoResult.repo._id, pr.number);
       return flagged
         ? { status: "flagged_newer_commits" }
         : { status: "ignored", reason: "synchronize_no_active_run" };
     }
 
-    case "closed":
-      await cancelQueued(repo._id, pr.number, "pr_closed");
+    case "closed": {
+      const repoResult = await resolveRepo(installationId, repository.full_name);
+      if (!repoResult.ok) {
+        return { status: "ignored", reason: repoResult.reason };
+      }
+      await cancelQueued(repoResult.repo._id, pr.number, "pr_closed");
       return { status: "cancelled", reason: "pr_closed" };
+    }
 
     case "review_request_removed": {
-      if (payload.requested_reviewer?.id !== account.githubUserId) {
-        return { status: "ignored", reason: "reviewer_mismatch" };
-      }
-      await cancelQueued(repo._id, pr.number, "request_removed");
+      const tenant = await resolveReviewTenant(
+        installationId,
+        repository.full_name,
+        reviewerId,
+      );
+      if (!tenant.ok) return { status: "ignored", reason: tenant.reason };
+      await cancelQueued(tenant.repo._id, pr.number, "request_removed");
       return { status: "cancelled", reason: "request_removed" };
     }
 

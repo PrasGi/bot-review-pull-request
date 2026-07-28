@@ -1,7 +1,8 @@
 import type { Collection } from "mongodb";
 import { getDb } from "@/lib/db/client";
 import type {
-  AccountDoc,
+  InstallationDoc,
+  UserConnectionDoc,
   RepoDoc,
   ReviewRequestDoc,
   ReviewDoc,
@@ -13,7 +14,8 @@ import type {
 } from "@/lib/db/types";
 
 export const COLLECTIONS = {
-  accounts: "accounts",
+  installations: "installations",
+  userConnections: "user_connections",
   repos: "repos",
   reviewRequests: "review_requests",
   reviews: "reviews",
@@ -24,8 +26,18 @@ export const COLLECTIONS = {
   sessions: "sessions",
 } as const;
 
-export async function accountsCollection(): Promise<Collection<AccountDoc>> {
-  return (await getDb()).collection<AccountDoc>(COLLECTIONS.accounts);
+export async function installationsCollection(): Promise<
+  Collection<InstallationDoc>
+> {
+  return (await getDb()).collection<InstallationDoc>(COLLECTIONS.installations);
+}
+
+export async function userConnectionsCollection(): Promise<
+  Collection<UserConnectionDoc>
+> {
+  return (await getDb()).collection<UserConnectionDoc>(
+    COLLECTIONS.userConnections,
+  );
 }
 
 export async function reposCollection(): Promise<Collection<RepoDoc>> {

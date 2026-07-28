@@ -20,7 +20,12 @@ interface InstallationReposResponse {
 
 export interface GitHubInstallation {
   id: number;
-  account: { login: string; id: number } | null;
+  account: {
+    login: string;
+    id: number;
+    type?: "User" | "Organization";
+  } | null;
+  repository_selection?: "all" | "selected";
 }
 
 interface UserInstallationsResponse {

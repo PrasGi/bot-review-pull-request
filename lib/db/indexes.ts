@@ -1,5 +1,6 @@
 import {
-  accountsCollection,
+  installationsCollection,
+  userConnectionsCollection,
   reposCollection,
   reviewRequestsCollection,
   reviewsCollection,
@@ -9,17 +10,24 @@ import {
 } from "@/lib/db/collections";
 
 export async function ensureIndexes(): Promise<void> {
-  const accounts = await accountsCollection();
-  await accounts.createIndexes([
+  const installations = await installationsCollection();
+  await installations.createIndexes([
     { key: { installationId: 1 }, unique: true, name: "installationId_unique" },
-    { key: { githubUserId: 1 }, name: "githubUserId" },
+    { key: { accountId: 1 }, name: "accountId" },
+  ]);
+
+  const userConnections = await userConnectionsCollection();
+  await userConnections.createIndexes([
+    { key: { githubUserId: 1 }, unique: true, name: "githubUserId_unique" },
     { key: { githubLogin: 1 }, name: "githubLogin" },
+    { key: { installationIds: 1 }, name: "installationIds" },
   ]);
 
   const repos = await reposCollection();
   await repos.createIndexes([
     { key: { fullName: 1 }, unique: true, name: "fullName_unique" },
-    { key: { accountId: 1 }, name: "accountId" },
+    { key: { installationRef: 1 }, name: "installationRef" },
+    { key: { installationId: 1 }, name: "installationId" },
   ]);
 
   const reviewRequests = await reviewRequestsCollection();

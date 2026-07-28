@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getEnv } from "@/lib/env";
 import { safeEqual } from "@/lib/crypto";
 import { exchangeCodeForTokens } from "@/lib/github/oauth";
-import { connectAccount } from "@/lib/github/sync";
+import { connectUser } from "@/lib/github/sync";
 import { OAUTH_STATE_COOKIE } from "@/app/api/github/connect/route";
 
 export const runtime = "nodejs";
@@ -22,10 +22,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const code = params.get("code");
   const state = params.get("state");
   const setupAction = params.get("setup_action");
-  const installationIdRaw = params.get("installation_id");
-  const installationIdHint = installationIdRaw
-    ? Number.parseInt(installationIdRaw, 10)
-    : null;
 
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
@@ -46,10 +42,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   try {
     const tokens = await exchangeCodeForTokens(code);
-    const { githubLogin, repoCount } = await connectAccount(
-      tokens,
-      installationIdHint,
-    );
+    const { githubLogin, repoCount } = await connectUser(tokens);
     return redirectToProjects({
       connect: "success",
       login: githubLogin,

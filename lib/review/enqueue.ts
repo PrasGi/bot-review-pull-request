@@ -4,11 +4,12 @@ import {
   reviewsCollection,
 } from "@/lib/db/collections";
 import type {
-  AccountDoc,
+  InstallationDoc,
   RepoDoc,
   ReviewKind,
   ReviewRequestDoc,
   ReviewTrigger,
+  UserConnectionDoc,
 } from "@/lib/db/types";
 import type { WebhookPullRequest } from "@/lib/webhook/payloads";
 
@@ -38,20 +39,23 @@ export type EnqueueResult =
   | { status: "skipped_draft"; requestId: ObjectId };
 
 export async function enqueueReviewRequest(params: {
-  account: AccountDoc;
+  installation: InstallationDoc;
+  reviewer: UserConnectionDoc;
   repo: RepoDoc;
   pr: WebhookPullRequest;
   deliveryId: string;
   trigger: ReviewTrigger;
   draftSkip: boolean;
 }): Promise<EnqueueResult> {
-  const { account, repo, pr, deliveryId, trigger, draftSkip } = params;
+  const { installation, reviewer, repo, pr, deliveryId, trigger, draftSkip } =
+    params;
   const requests = await reviewRequestsCollection();
   const now = new Date();
 
   const base = {
     deliveryId,
-    accountId: account._id,
+    userConnectionId: reviewer._id,
+    installationId: installation.installationId,
     repoId: repo._id,
     prNumber: pr.number,
     prTitle: pr.title,

@@ -1,6 +1,7 @@
 import type { ObjectId } from "mongodb";
 import {
-  accountsCollection,
+  installationsCollection,
+  userConnectionsCollection,
   reposCollection,
 } from "@/lib/db/collections";
 import type { RepoConfig } from "@/lib/db/types";
@@ -10,6 +11,7 @@ import {
   fetchAuthenticatedUser,
   fetchUserInstallations,
   fetchInstallationRepos,
+  type GitHubInstallation,
   type GitHubRepo,
 } from "@/lib/github/api";
 
@@ -27,8 +29,33 @@ export function defaultRepoConfig(): RepoConfig {
   };
 }
 
-async function upsertRepos(
-  accountId: ObjectId,
+export async function upsertInstallation(
+  installation: GitHubInstallation,
+  selection: "all" | "selected",
+): Promise<ObjectId> {
+  const installations = await installationsCollection();
+  const now = new Date();
+  const result = await installations.findOneAndUpdate(
+    { installationId: installation.id },
+    {
+      $set: {
+        accountType: installation.account?.type ?? "User",
+        accountLogin: installation.account?.login ?? "",
+        accountId: installation.account?.id ?? 0,
+        repositorySelection: selection,
+        updatedAt: now,
+      },
+      $setOnInsert: { installationId: installation.id, createdAt: now },
+    },
+    { upsert: true, returnDocument: "after" },
+  );
+  if (!result) throw new Error("Failed to upsert installation");
+  return result._id;
+}
+
+export async function upsertRepos(
+  installationRef: ObjectId,
+  installationId: number,
   repos: GitHubRepo[],
 ): Promise<void> {
   const collection = await reposCollection();
@@ -38,8 +65,10 @@ async function upsertRepos(
       { fullName: repo.full_name },
       {
         $set: {
-          accountId,
+          installationRef,
+          installationId,
           fullName: repo.full_name,
+          repoGithubId: repo.id,
           removedFromInstallation: false,
           updatedAt: now,
         },
@@ -54,70 +83,50 @@ async function upsertRepos(
   }
 }
 
-async function resolveInstallationId(
-  accessToken: string,
-  userId: number,
-  hint: number | null,
-): Promise<number> {
-  if (hint) return hint;
-  const installations = await fetchUserInstallations(accessToken);
-  const own = installations.find((i) => i.account?.id === userId);
-  if (own) return own.id;
-  const first = installations[0];
-  if (first) return first.id;
-  throw new Error("No installation found for this user");
-}
-
-export async function connectAccount(
-  tokens: GitHubTokenSet,
-  installationIdHint: number | null,
-): Promise<{
-  accountId: ObjectId;
+export async function connectUser(tokens: GitHubTokenSet): Promise<{
   githubLogin: string;
+  installationCount: number;
   repoCount: number;
 }> {
   const user = await fetchAuthenticatedUser(tokens.accessToken);
-  const installationId = await resolveInstallationId(
-    tokens.accessToken,
-    user.id,
-    installationIdHint,
-  );
-  const { selection, repos } = await fetchInstallationRepos(
-    tokens.accessToken,
-    installationId,
-  );
+  const installations = await fetchUserInstallations(tokens.accessToken);
 
-  const accounts = await accountsCollection();
+  let repoCount = 0;
+  for (const installation of installations) {
+    const { selection, repos } = await fetchInstallationRepos(
+      tokens.accessToken,
+      installation.id,
+    );
+    const ref = await upsertInstallation(installation, selection);
+    await upsertRepos(ref, installation.id, repos);
+    repoCount += repos.length;
+  }
+
+  const userConnections = await userConnectionsCollection();
   const now = new Date();
-  const result = await accounts.findOneAndUpdate(
+  await userConnections.updateOne(
     { githubUserId: user.id },
     {
       $set: {
         githubLogin: user.login,
-        githubUserId: user.id,
         displayName: user.name ?? user.login,
         avatarUrl: user.avatar_url,
-        installationId,
         userTokenEncrypted: encrypt(tokens.accessToken),
         tokenExpiresAt: tokens.accessTokenExpiresAt,
         refreshTokenEncrypted: encrypt(tokens.refreshToken),
         refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+        installationIds: installations.map((i) => i.id),
         reconnectRequired: false,
-        repositorySelection: selection,
         updatedAt: now,
       },
-      $setOnInsert: { createdAt: now },
+      $setOnInsert: { githubUserId: user.id, createdAt: now },
     },
-    { upsert: true, returnDocument: "after" },
+    { upsert: true },
   );
 
-  if (!result) throw new Error("Failed to upsert account");
-
-  await upsertRepos(result._id, repos);
-
   return {
-    accountId: result._id,
     githubLogin: user.login,
-    repoCount: repos.length,
+    installationCount: installations.length,
+    repoCount,
   };
 }

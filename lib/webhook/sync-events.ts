@@ -1,47 +1,46 @@
 import type { ObjectId } from "mongodb";
 import {
-  accountsCollection,
+  installationsCollection,
+  userConnectionsCollection,
   reposCollection,
 } from "@/lib/db/collections";
 import { defaultRepoConfig } from "@/lib/github/sync";
 import type {
   InstallationEvent,
   InstallationRepositoriesEvent,
+  WebhookInstallation,
 } from "@/lib/webhook/payloads";
 
-async function ensureAccountPlaceholder(
-  installationId: number,
-  account: { id: number; login: string } | null | undefined,
+async function upsertInstallationFromWebhook(
+  installation: WebhookInstallation,
 ): Promise<ObjectId> {
-  const accounts = await accountsCollection();
+  const installations = await installationsCollection();
   const now = new Date();
-  const result = await accounts.findOneAndUpdate(
-    { installationId },
+  const result = await installations.findOneAndUpdate(
+    { installationId: installation.id },
     {
-      $set: { updatedAt: now },
+      $set: {
+        accountType: installation.account?.type ?? "User",
+        accountLogin: installation.account?.login ?? "",
+        accountId: installation.account?.id ?? 0,
+        updatedAt: now,
+      },
       $setOnInsert: {
-        installationId,
-        githubUserId: account?.id ?? 0,
-        githubLogin: account?.login ?? "",
-        displayName: account?.login ?? "",
-        userTokenEncrypted: "",
-        tokenExpiresAt: now,
-        refreshTokenEncrypted: "",
-        refreshTokenExpiresAt: now,
-        reconnectRequired: true,
+        installationId: installation.id,
         repositorySelection: "selected",
         createdAt: now,
       },
     },
     { upsert: true, returnDocument: "after" },
   );
-  if (!result) throw new Error("Failed to upsert account placeholder");
+  if (!result) throw new Error("Failed to upsert installation");
   return result._id;
 }
 
 async function addRepos(
-  accountId: ObjectId,
-  repos: { full_name: string }[],
+  installationRef: ObjectId,
+  installationId: number,
+  repos: { id: number; full_name: string }[],
 ): Promise<void> {
   const collection = await reposCollection();
   const now = new Date();
@@ -50,8 +49,10 @@ async function addRepos(
       { fullName: repo.full_name },
       {
         $set: {
-          accountId,
+          installationRef,
+          installationId,
           fullName: repo.full_name,
+          repoGithubId: repo.id,
           removedFromInstallation: false,
           updatedAt: now,
         },
@@ -79,48 +80,55 @@ async function markReposRemoved(
   }
 }
 
+async function linkSenderToInstallation(
+  senderId: number | undefined,
+  installationId: number,
+): Promise<void> {
+  if (!senderId) return;
+  const connections = await userConnectionsCollection();
+  await connections.updateOne(
+    { githubUserId: senderId },
+    { $addToSet: { installationIds: installationId } },
+  );
+}
+
 export async function handleInstallationEvent(
   payload: InstallationEvent,
 ): Promise<void> {
   const installationId = payload.installation.id;
 
   if (payload.action === "deleted" || payload.action === "suspend") {
-    const accounts = await accountsCollection();
-    const account = await accounts.findOne({ installationId });
-    if (account) {
-      await accounts.updateOne(
-        { _id: account._id },
-        { $set: { reconnectRequired: true, updatedAt: new Date() } },
-      );
-      const repos = await reposCollection();
-      await repos.updateMany(
-        { accountId: account._id },
-        { $set: { enabled: false, updatedAt: new Date() } },
-      );
-    }
+    const installations = await installationsCollection();
+    const now = new Date();
+    const field = payload.action === "deleted" ? "deletedAt" : "suspendedAt";
+    await installations.updateOne(
+      { installationId },
+      { $set: { [field]: now, updatedAt: now } },
+    );
+    const repos = await reposCollection();
+    await repos.updateMany(
+      { installationId },
+      { $set: { enabled: false, updatedAt: now } },
+    );
     return;
   }
 
-  const accountId = await ensureAccountPlaceholder(
-    installationId,
-    payload.installation.account,
-  );
-  if (payload.repositories && payload.repositories.length > 0) {
-    await addRepos(accountId, payload.repositories);
+  const ref = await upsertInstallationFromWebhook(payload.installation);
+  if (payload.repositories?.length) {
+    await addRepos(ref, installationId, payload.repositories);
   }
+  await linkSenderToInstallation(payload.sender?.id, installationId);
 }
 
 export async function handleInstallationRepositoriesEvent(
   payload: InstallationRepositoriesEvent,
 ): Promise<void> {
-  const accountId = await ensureAccountPlaceholder(
-    payload.installation.id,
-    payload.installation.account,
-  );
+  const ref = await upsertInstallationFromWebhook(payload.installation);
   if (payload.repositories_added?.length) {
-    await addRepos(accountId, payload.repositories_added);
+    await addRepos(ref, payload.installation.id, payload.repositories_added);
   }
   if (payload.repositories_removed?.length) {
     await markReposRemoved(payload.repositories_removed);
   }
+  await linkSenderToInstallation(payload.sender?.id, payload.installation.id);
 }

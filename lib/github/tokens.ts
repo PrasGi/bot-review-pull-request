@@ -1,6 +1,6 @@
 import type { ObjectId } from "mongodb";
-import { accountsCollection } from "@/lib/db/collections";
-import type { AccountDoc } from "@/lib/db/types";
+import { userConnectionsCollection } from "@/lib/db/collections";
+import type { UserConnectionDoc } from "@/lib/db/types";
 import { encrypt, decrypt } from "@/lib/crypto";
 import { refreshTokens, type GitHubTokenSet } from "@/lib/github/oauth";
 
@@ -9,17 +9,17 @@ const LOCK_DURATION_MS = 30 * 1000;
 const POLL_INTERVAL_MS = 250;
 const POLL_MAX_ATTEMPTS = 20;
 
-function needsRefresh(account: AccountDoc): boolean {
+function needsRefresh(account: UserConnectionDoc): boolean {
   return account.tokenExpiresAt.getTime() - Date.now() < REFRESH_THRESHOLD_MS;
 }
 
 async function persistTokens(
-  accountId: ObjectId,
+  connectionId: ObjectId,
   tokens: GitHubTokenSet,
 ): Promise<void> {
-  const accounts = await accountsCollection();
-  await accounts.updateOne(
-    { _id: accountId },
+  const connections = await userConnectionsCollection();
+  await connections.updateOne(
+    { _id: connectionId },
     {
       $set: {
         userTokenEncrypted: encrypt(tokens.accessToken),
@@ -34,10 +34,10 @@ async function persistTokens(
   );
 }
 
-async function markReconnectRequired(accountId: ObjectId): Promise<void> {
-  const accounts = await accountsCollection();
-  await accounts.updateOne(
-    { _id: accountId },
+async function markReconnectRequired(connectionId: ObjectId): Promise<void> {
+  const connections = await userConnectionsCollection();
+  await connections.updateOne(
+    { _id: connectionId },
     { $set: { reconnectRequired: true, updatedAt: new Date() } },
     // Keep refreshLockUntil so it self-expires; do not block reconnect.
   );
@@ -47,12 +47,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function acquireLock(accountId: ObjectId): Promise<boolean> {
-  const accounts = await accountsCollection();
+async function acquireLock(connectionId: ObjectId): Promise<boolean> {
+  const connections = await userConnectionsCollection();
   const now = new Date();
-  const result = await accounts.updateOne(
+  const result = await connections.updateOne(
     {
-      _id: accountId,
+      _id: connectionId,
       $or: [
         { refreshLockUntil: { $exists: false } },
         { refreshLockUntil: { $lt: now } },
@@ -63,16 +63,14 @@ async function acquireLock(accountId: ObjectId): Promise<boolean> {
   return result.modifiedCount === 1;
 }
 
-async function waitForFreshToken(
-  accountId: ObjectId,
-): Promise<string> {
-  const accounts = await accountsCollection();
+async function waitForFreshToken(connectionId: ObjectId): Promise<string> {
+  const connections = await userConnectionsCollection();
   for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
     await sleep(POLL_INTERVAL_MS);
-    const doc = await accounts.findOne({ _id: accountId });
-    if (!doc) throw new Error("Account disappeared during token refresh");
+    const doc = await connections.findOne({ _id: connectionId });
+    if (!doc) throw new Error("User connection disappeared during refresh");
     if (doc.reconnectRequired) {
-      throw new Error("Account requires reconnect (refresh failed)");
+      throw new Error("User connection requires reconnect (refresh failed)");
     }
     if (!needsRefresh(doc)) {
       return decrypt(doc.userTokenEncrypted);
@@ -85,34 +83,34 @@ async function waitForFreshToken(
 // GitHub invalidates the old refresh token on rotation, so only ONE caller may
 // refresh; concurrent callers poll for the winner's result instead of racing.
 export async function getValidAccessToken(
-  accountId: ObjectId,
+  connectionId: ObjectId,
 ): Promise<string> {
-  const accounts = await accountsCollection();
-  const account = await accounts.findOne({ _id: accountId });
-  if (!account) throw new Error("Account not found");
-  if (account.reconnectRequired) {
-    throw new Error("Account requires reconnect");
+  const connections = await userConnectionsCollection();
+  const connection = await connections.findOne({ _id: connectionId });
+  if (!connection) throw new Error("User connection not found");
+  if (connection.reconnectRequired) {
+    throw new Error("User connection requires reconnect");
   }
-  if (!needsRefresh(account)) {
-    return decrypt(account.userTokenEncrypted);
+  if (!needsRefresh(connection)) {
+    return decrypt(connection.userTokenEncrypted);
   }
 
-  const gotLock = await acquireLock(accountId);
+  const gotLock = await acquireLock(connectionId);
   if (!gotLock) {
-    return waitForFreshToken(accountId);
+    return waitForFreshToken(connectionId);
   }
 
   try {
-    const currentRefresh = decrypt(account.refreshTokenEncrypted);
+    const currentRefresh = decrypt(connection.refreshTokenEncrypted);
     const fresh = await refreshTokens(currentRefresh);
-    await persistTokens(accountId, fresh);
+    await persistTokens(connectionId, fresh);
     return fresh.accessToken;
   } catch (error) {
-    const reread = await accounts.findOne({ _id: accountId });
+    const reread = await connections.findOne({ _id: connectionId });
     if (reread && !needsRefresh(reread) && !reread.reconnectRequired) {
       return decrypt(reread.userTokenEncrypted);
     }
-    await markReconnectRequired(accountId);
+    await markReconnectRequired(connectionId);
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Token refresh failed: ${message}`);
   }

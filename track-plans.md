@@ -1034,6 +1034,12 @@ Centered glass card (max-w-sm) on gradient page bg: logo, email + password field
 > Known minor issue (non-blocking): `accounts.repositorySelection` stored as `null` — the `/user/installations/{id}/repositories` response omitted `repository_selection`. Informational only (UI hint). Revisit if needed.
 >
 > Note: org repos (member-only, e.g. YoCoApp) require org-owner approval to install the App (`setup_action=request`) — deferred; testing with personal PrasGi repos first.
+>
+> **Data model REVISED (Oracle, 2026-07-28)** — split conflated `accounts` into TWO collections because "who installs the App" ≠ "who reviews the PR" (critical for org installs):
+> - `installations` (keyed by installationId): repo coverage + webhook routing. accountType User|Organization.
+> - `user_connections` (keyed by githubUserId): the OAuth'd human + ghu_ token used to SUBMIT reviews. `installationIds[]` links a user to every installation they can act through (personal + orgs they're a member of).
+> - `repos.installationId`/`installationRef` reference the installation. `review_requests.userConnectionId` + `installationId`.
+> - Tenant resolution for a review: installation(id) covers repo AND requested_reviewer.id === a connected user AND that user is linked to the installation. Submit token = that user's ghu_ (works on org repos when the user has write access). Old model + test data were dropped and re-created under the new schema.
 
 ### Phase 1 — Webhook Ingestion (Flow F1, F2) `[x]`
 - [ ] `POST /api/webhook`: raw-body read, timing-safe signature verify (401), delivery dedupe (duplicate→200)

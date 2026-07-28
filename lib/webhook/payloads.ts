@@ -1,6 +1,10 @@
 export interface WebhookInstallation {
   id: number;
-  account?: { id: number; login: string } | null;
+  account?: {
+    id: number;
+    login: string;
+    type?: "User" | "Organization";
+  } | null;
 }
 
 export interface WebhookRepository {
@@ -38,6 +42,7 @@ export interface InstallationEvent {
   action: string;
   installation: WebhookInstallation;
   repositories?: { id: number; full_name: string }[];
+  sender?: WebhookUser;
 }
 
 export interface InstallationRepositoriesEvent {
@@ -46,6 +51,7 @@ export interface InstallationRepositoriesEvent {
   repository_selection: "all" | "selected";
   repositories_added?: { id: number; full_name: string }[];
   repositories_removed?: { id: number; full_name: string }[];
+  sender?: WebhookUser;
 }
 
 export interface GenericWebhookPayload {

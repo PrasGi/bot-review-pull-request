@@ -31,20 +31,32 @@ export type FindingCategory =
 
 export type IntentMatchStatus = "match" | "partial" | "mismatch";
 
-export interface AccountDoc {
+export interface InstallationDoc {
   _id: ObjectId;
-  githubLogin: string;
+  installationId: number;
+  accountType: "User" | "Organization";
+  accountLogin: string;
+  accountId: number;
+  repositorySelection: "all" | "selected";
+  suspendedAt?: Date;
+  deletedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UserConnectionDoc {
+  _id: ObjectId;
   githubUserId: number;
+  githubLogin: string;
   displayName: string;
   avatarUrl?: string;
-  installationId: number;
   userTokenEncrypted: string;
   tokenExpiresAt: Date;
   refreshTokenEncrypted: string;
   refreshTokenExpiresAt: Date;
+  installationIds: number[];
   reconnectRequired?: boolean;
   refreshLockUntil?: Date;
-  repositorySelection: "all" | "selected";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,8 +75,10 @@ export interface RepoConfig {
 
 export interface RepoDoc {
   _id: ObjectId;
-  accountId: ObjectId;
+  installationRef: ObjectId;
+  installationId: number;
   fullName: string;
+  repoGithubId: number;
   enabled: boolean;
   config: RepoConfig;
   lastEventAt?: Date;
@@ -104,7 +118,8 @@ export interface ReviewRequestDoc {
   _id: ObjectId;
   deliveryId: string;
   retryOf?: ObjectId;
-  accountId: ObjectId;
+  userConnectionId: ObjectId;
+  installationId: number;
   repoId: ObjectId;
   prNumber: number;
   prTitle: string;
@@ -184,7 +199,7 @@ export interface AICallDoc {
   _id: ObjectId;
   requestId: ObjectId;
   repoId: ObjectId;
-  accountId: ObjectId;
+  userConnectionId: ObjectId;
   provider: AIProviderName;
   model: string;
   purpose: AICallPurpose;
@@ -205,7 +220,7 @@ export interface UsageDailyDoc {
   _id: string;
   date: string;
   repoId: ObjectId;
-  accountId: ObjectId;
+  userConnectionId: ObjectId;
   provider: AIProviderName;
   model: string;
   calls: number;
