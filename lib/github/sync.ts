@@ -59,8 +59,8 @@ async function resolveInstallationId(
   userId: number,
   hint: number | null,
 ): Promise<number> {
+  if (hint) return hint;
   const installations = await fetchUserInstallations(accessToken);
-  if (hint && installations.some((i) => i.id === hint)) return hint;
   const own = installations.find((i) => i.account?.id === userId);
   if (own) return own.id;
   const first = installations[0];

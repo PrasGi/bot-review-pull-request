@@ -61,12 +61,14 @@ async function postToken(
   return toTokenSet(data);
 }
 
-export function buildAuthorizeUrl(state: string): string {
+// The install URL (not the authorize endpoint) is what creates an installation;
+// with OAuth-on-install enabled it also returns a code to the callback.
+export function buildInstallUrl(state: string): string {
   const env = getEnv();
-  const url = new URL("https://github.com/login/oauth/authorize");
-  url.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
+  const url = new URL(
+    `https://github.com/apps/${env.GITHUB_APP_SLUG}/installations/new`,
+  );
   url.searchParams.set("state", state);
-  url.searchParams.set("redirect_uri", `${env.APP_URL}/api/github/callback`);
   return url.toString();
 }
 

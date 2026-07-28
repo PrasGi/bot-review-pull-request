@@ -21,6 +21,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const params = request.nextUrl.searchParams;
   const code = params.get("code");
   const state = params.get("state");
+  const setupAction = params.get("setup_action");
   const installationIdRaw = params.get("installation_id");
   const installationIdHint = installationIdRaw
     ? Number.parseInt(installationIdRaw, 10)
@@ -30,14 +31,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
   cookieStore.delete(OAUTH_STATE_COOKIE);
 
-  if (!code) {
-    return redirectToProjects({ connect: "error", reason: "missing_code" });
-  }
   if (!state || !expectedState) {
     return redirectToProjects({ connect: "error", reason: "missing_state" });
   }
   if (!safeEqual(state, expectedState)) {
     return redirectToProjects({ connect: "error", reason: "state_mismatch" });
+  }
+  if (setupAction === "request") {
+    return redirectToProjects({ connect: "pending", reason: "org_approval" });
+  }
+  if (!code) {
+    return redirectToProjects({ connect: "error", reason: "missing_code" });
   }
 
   try {
