@@ -1,5 +1,19 @@
 import { z } from "zod";
 
+// Models are verbose and often overshoot length hints. Truncate rather than
+// reject — a long summary must never fail an otherwise-valid review.
+function cappedString(max: number): z.ZodType<string> {
+  return z
+    .string()
+    .transform((s) => (s.length > max ? s.slice(0, max) : s));
+}
+
+// Models sometimes return confidence on a 0-100 scale instead of 0-1.
+const confidenceSchema = z
+  .number()
+  .transform((n) => (n > 1 ? n / 100 : n))
+  .pipe(z.number().min(0).max(1));
+
 export const findingSchema = z.object({
   path: z.string().min(1),
   line: z.number().int().positive(),
@@ -13,31 +27,42 @@ export const findingSchema = z.object({
     "test",
     "scope",
   ]),
-  comment: z.string().min(10).max(1500),
-  suggestion: z.string().max(2000).optional(),
+  comment: cappedString(1500),
+  suggestion: cappedString(2000).optional(),
 });
 
 export const intentMatchSchema = z.object({
   status: z.enum(["match", "partial", "mismatch"]),
-  explanation: z.string().max(400),
+  explanation: cappedString(400),
 });
 
+// Drop malformed findings (missing path, non-positive line, etc.) instead of
+// failing the whole review — a general remark with no location is not fatal.
+const lenientFindings = z
+  .array(z.unknown())
+  .transform((items) =>
+    items
+      .map((item) => findingSchema.safeParse(item))
+      .filter((r) => r.success)
+      .map((r) => r.data),
+  );
+
 export const chunkReviewSchema = z.object({
-  findings: z.array(findingSchema),
-  chunkSummary: z.string().max(600),
-  intentNotes: z.string().max(300).optional(),
-  summary: z.string().max(1200).optional(),
+  findings: lenientFindings,
+  chunkSummary: cappedString(600),
+  intentNotes: cappedString(300).optional(),
+  summary: cappedString(1200).optional(),
   verdict: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]).optional(),
-  confidence: z.number().min(0).max(1).optional(),
-  verdictReason: z.string().max(400).optional(),
+  confidence: confidenceSchema.optional(),
+  verdictReason: cappedString(400).optional(),
   intentMatch: intentMatchSchema.optional(),
 });
 
 export const verdictSchema = z.object({
-  summary: z.string().max(1200),
+  summary: cappedString(1200),
   verdict: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]),
-  confidence: z.number().min(0).max(1),
-  verdictReason: z.string().max(400),
+  confidence: confidenceSchema,
+  verdictReason: cappedString(400),
   intentMatch: intentMatchSchema,
 });
 
