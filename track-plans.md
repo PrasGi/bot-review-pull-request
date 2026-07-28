@@ -1029,7 +1029,11 @@ Centered glass card (max-w-sm) on gradient page bg: logo, email + password field
 - [x] `GET /api/health` (db ping)
 - [x] Verified: `pnpm typecheck` + `pnpm lint` clean; seed chain (alias resolve + argon2 + env) runs to DB connect
 
-> **User action pending before Phase 1 E2E**: follow `docs/setup.md` (Atlas cluster, GitHub App registration, env vars, `pnpm seed`, connect an account).
+> **Phase 0 VERIFIED LIVE (2026-07-28)**: deployed at https://bot-review.prasme.id (Vercel Hobby + custom domain), Atlas connected (`/api/health` ok), GitHub App `prasgi-pr-reviewer` registered, account `@PrasGi` connected via OAuth install→authorize (installationId 149591672), user+refresh tokens encrypted in DB, 94 repos synced.
+>
+> Known minor issue (non-blocking): `accounts.repositorySelection` stored as `null` — the `/user/installations/{id}/repositories` response omitted `repository_selection`. Informational only (UI hint). Revisit if needed.
+>
+> Note: org repos (member-only, e.g. YoCoApp) require org-owner approval to install the App (`setup_action=request`) — deferred; testing with personal PrasGi repos first.
 
 ### Phase 1 — Webhook Ingestion (Flow F1, F2) `[ ]`
 - [ ] `POST /api/webhook`: raw-body read, timing-safe signature verify (401), delivery dedupe (duplicate→200)
