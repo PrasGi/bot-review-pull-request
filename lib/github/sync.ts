@@ -13,7 +13,7 @@ import {
   type GitHubRepo,
 } from "@/lib/github/api";
 
-function defaultRepoConfig(): RepoConfig {
+export function defaultRepoConfig(): RepoConfig {
   return {
     provider: null,
     model: null,

@@ -1035,7 +1035,7 @@ Centered glass card (max-w-sm) on gradient page bg: logo, email + password field
 >
 > Note: org repos (member-only, e.g. YoCoApp) require org-owner approval to install the App (`setup_action=request`) — deferred; testing with personal PrasGi repos first.
 
-### Phase 1 — Webhook Ingestion (Flow F1, F2) `[ ]`
+### Phase 1 — Webhook Ingestion (Flow F1, F2) `[x]`
 - [ ] `POST /api/webhook`: raw-body read, timing-safe signature verify (401), delivery dedupe (duplicate→200)
 - [ ] Trigger matrix implementation (§3.2) incl. draft skip, ready_for_review, closed/removed cancellation, synchronize→newerCommitsFlag, superseded rule (F6)
 - [ ] Tenant resolution (repo→account) + review_requests persistence, ACK <1s
