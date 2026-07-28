@@ -101,7 +101,7 @@ export async function runReviewPipeline(
     request.prNumber,
   );
 
-  const { kept, skipped } = filterFiles(allFiles, repo.config.ignorePatterns);
+  const { kept } = filterFiles(allFiles, repo.config.ignorePatterns);
 
   const { provider, model, instance } = resolveModel(repo.config, settings);
   const pricing = settings.modelPricing.find(
@@ -111,14 +111,10 @@ export async function runReviewPipeline(
   if (kept.length === 0) {
     const body = buildReviewBody({
       verdict: "COMMENT",
-      summary:
-        "Only non-reviewable files changed (lockfiles / generated / binary). Nothing to review.",
-      intentMatch: { status: "match", explanation: "No reviewable code." },
-      findings: [],
-      filesReviewed: 0,
-      skippedFiles: skipped,
-      shortSha: pr.headSha.slice(0, 7),
+      summary: "No reviewable code changes (only lockfiles/generated files).",
+      intentMatch: { status: "match", explanation: "" },
       newerCommits: request.newerCommitsFlag ?? false,
+      shortSha: pr.headSha.slice(0, 7),
       model,
     });
     const result = await submitReview(token, {
@@ -143,7 +139,7 @@ export async function runReviewPipeline(
   }
 
   const diffBudget = DEFAULT_CONTEXT - OUTPUT_HEADROOM - 2000;
-  const { chunks, unreviewed } = chunkFiles(
+  const { chunks } = chunkFiles(
     kept,
     diffBudget,
     repo.config.maxChunks,
@@ -254,25 +250,17 @@ export async function runReviewPipeline(
   });
 
   const finalIntent: IntentMatch = intentMatch;
-  if (!summaryText) summaryText = "Automated review complete.";
-  if (unreviewed.length > 0) {
-    summaryText += ` Note: ${unreviewed.length} file(s) exceeded size limits and were not reviewed.`;
+  if (!summaryText) {
+    summaryText =
+      resolution.verdict === "APPROVE" ? "Looks good." : "See comments.";
   }
-
-  const skippedWithUnreviewed = [
-    ...skipped,
-    ...unreviewed.map((f) => ({ path: f.filename, reason: "size_limit" })),
-  ];
 
   const body = buildReviewBody({
     verdict: resolution.verdict,
     summary: summaryText,
     intentMatch: finalIntent,
-    findings: findingsOut,
-    filesReviewed: kept.length - unreviewed.length,
-    skippedFiles: skippedWithUnreviewed,
-    shortSha: pr.headSha.slice(0, 7),
     newerCommits: request.newerCommitsFlag ?? false,
+    shortSha: pr.headSha.slice(0, 7),
     model,
   });
 

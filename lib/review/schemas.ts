@@ -51,7 +51,7 @@ export const chunkReviewSchema = z.object({
   findings: lenientFindings,
   chunkSummary: cappedString(600),
   intentNotes: cappedString(300).optional(),
-  summary: cappedString(1200).optional(),
+  summary: cappedString(400).optional(),
   verdict: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]).optional(),
   confidence: confidenceSchema.optional(),
   verdictReason: cappedString(400).optional(),
