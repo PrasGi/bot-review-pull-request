@@ -1,4 +1,4 @@
-import type { IntentMatch, Verdict } from "@/lib/db/types";
+import type { Verdict } from "@/lib/db/types";
 
 const VERDICT_BANNER: Record<Verdict, string> = {
   APPROVE: "Approved ✅",
@@ -9,7 +9,7 @@ const VERDICT_BANNER: Record<Verdict, string> = {
 export interface SummaryInput {
   verdict: Verdict;
   summary: string;
-  intentMatch: IntentMatch;
+  caveat?: string;
   newerCommits: boolean;
   shortSha: string;
   model: string;
@@ -22,8 +22,8 @@ export function buildReviewBody(input: SummaryInput): string {
     input.summary,
   ];
 
-  if (input.intentMatch.status === "mismatch") {
-    parts.push("", `> ⚠️ ${input.intentMatch.explanation}`);
+  if (input.caveat) {
+    parts.push("", `> ⚠️ ${input.caveat}`);
   }
 
   if (input.newerCommits) {

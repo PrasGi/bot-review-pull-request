@@ -150,6 +150,7 @@ export interface Finding {
   category: FindingCategory;
   comment: string;
   suggestion?: string;
+  blocking: boolean;
   posted: boolean;
 }
 

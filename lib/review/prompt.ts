@@ -16,35 +16,35 @@ function renderCustomGuidelinesBlock(guidelines: string): string {
   return `REPOSITORY-SPECIFIC GUIDELINES (from the repo admin — trusted, take precedence over general preferences above):\n${truncated}`;
 }
 
+const BLOCKING_RULE = `
+BLOCKING (per finding): set "blocking": true ONLY when you are confident this is a real defect that must be fixed before merge and you can verify it from the diff (clear bug, security hole, data loss, broken contract). If you SUSPECT an issue but cannot fully verify it from the diff alone — complex flow, missing context, "this looks off but I'd need to see X" — set "blocking": false and phrase the comment as "Please double-check that ...". When in doubt, prefer "blocking": false. Never set blocking true for style, nits, or speculation. Almost always set blocking true for: removed auth/permission checks, committed secrets, null deref on a hot path, or a migration that drops data.`;
+
+const FINDING_SHAPE = `{ "path": string, "line": number, "endLine"?: number,
+      "severity": "critical"|"major"|"minor"|"nit",
+      "category": "bug"|"security"|"performance"|"maintainability"|"test"|"scope",
+      "comment": string, "suggestion"?: string, "blocking": boolean }`;
+
 const OUTPUT_SCHEMA_SINGLE = `
 OUTPUT JSON SHAPE (return exactly this object, no markdown fences):
 {
-  "findings": [
-    { "path": string, "line": number, "endLine"?: number,
-      "severity": "critical"|"major"|"minor"|"nit",
-      "category": "bug"|"security"|"performance"|"maintainability"|"test"|"scope",
-      "comment": string, "suggestion"?: string }
-  ],
+  "findings": [ ${FINDING_SHAPE} ],
   "chunkSummary": string,
   "summary": string,
   "verdict": "APPROVE"|"REQUEST_CHANGES"|"COMMENT",
   "confidence": number,
   "verdictReason": string,
   "intentMatch": { "status": "match"|"partial"|"mismatch", "explanation": string }
-}`;
+}
+${BLOCKING_RULE}`;
 
 const OUTPUT_SCHEMA_CHUNK = `
 OUTPUT JSON SHAPE (return exactly this object, no markdown fences):
 {
-  "findings": [
-    { "path": string, "line": number, "endLine"?: number,
-      "severity": "critical"|"major"|"minor"|"nit",
-      "category": "bug"|"security"|"performance"|"maintainability"|"test"|"scope",
-      "comment": string, "suggestion"?: string }
-  ],
+  "findings": [ ${FINDING_SHAPE} ],
   "chunkSummary": string,
   "intentNotes"?: string
-}`;
+}
+${BLOCKING_RULE}`;
 
 export function buildSystemPrompt(
   template: string,

@@ -29,6 +29,7 @@ export const findingSchema = z.object({
   ]),
   comment: cappedString(1500),
   suggestion: cappedString(2000).optional(),
+  blocking: z.boolean().default(false),
 });
 
 export const intentMatchSchema = z.object({

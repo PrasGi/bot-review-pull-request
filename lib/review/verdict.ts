@@ -54,29 +54,43 @@ export function filterFindingsToValidLines(
 export interface VerdictResolution {
   verdict: Verdict;
   forced?: VerdictForcedReason;
+  caveat?: string;
 }
 
+// The model self-declares `blocking` per finding: true only when it is confident
+// the issue must be fixed. Uncertain concerns are non-blocking -> approve with a
+// "please double-check" caveat instead of blocking the PR.
 export function resolveVerdict(params: {
-  proposed: Verdict;
-  confidence: number;
   intentMatch: IntentMatchOutput;
   findings: FindingOutput[];
   config: RepoConfig;
 }): VerdictResolution {
-  const { proposed, confidence, intentMatch, findings, config } = params;
-  const hasCritical = findings.some((f) => f.severity === "critical");
+  const { intentMatch, findings, config } = params;
 
-  if (hasCritical) {
-    return { verdict: "REQUEST_CHANGES", forced: "critical_findings" };
-  }
   if (!config.autoVerdict) {
     return { verdict: "COMMENT", forced: "auto_verdict_off" };
   }
-  if (confidence < config.confidenceThreshold) {
-    return { verdict: "COMMENT", forced: "low_confidence" };
+
+  const hasBlocker = findings.some((f) => f.blocking);
+  if (hasBlocker) {
+    return { verdict: "REQUEST_CHANGES", forced: "critical_findings" };
   }
-  if (intentMatch.status === "mismatch" && proposed === "APPROVE") {
-    return { verdict: "COMMENT", forced: "intent_mismatch" };
+
+  const hasCaveat = findings.some((f) => !f.blocking && f.severity !== "nit");
+  if (intentMatch.status === "mismatch") {
+    return {
+      verdict: "APPROVE",
+      forced: "intent_mismatch",
+      caveat:
+        "The title/description don't fully match the changes — please confirm this is intentional and documented.",
+    };
   }
-  return { verdict: proposed };
+  if (hasCaveat) {
+    return {
+      verdict: "APPROVE",
+      caveat:
+        "A few things I couldn't fully verify from the diff alone — please double-check the comments below.",
+    };
+  }
+  return { verdict: "APPROVE" };
 }

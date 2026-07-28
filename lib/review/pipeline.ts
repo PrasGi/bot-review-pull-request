@@ -112,7 +112,6 @@ export async function runReviewPipeline(
     const body = buildReviewBody({
       verdict: "COMMENT",
       summary: "No reviewable code changes (only lockfiles/generated files).",
-      intentMatch: { status: "match", explanation: "" },
       newerCommits: request.newerCommitsFlag ?? false,
       shortSha: pr.headSha.slice(0, 7),
       model,
@@ -153,7 +152,6 @@ export async function runReviewPipeline(
   );
 
   const allFindings: FindingOutput[] = [];
-  let proposedVerdict: Verdict = "COMMENT";
   let confidence = 0.5;
   let intentMatch: IntentMatchOutput = {
     status: "match",
@@ -223,7 +221,6 @@ export async function runReviewPipeline(
     if (!output) throw new Error(`chunk ${i + 1} JSON parse failed: ${parseError}`);
 
     allFindings.push(...output.findings);
-    if (output.verdict) proposedVerdict = output.verdict;
     if (output.confidence !== undefined) confidence = output.confidence;
     if (output.intentMatch) intentMatch = output.intentMatch;
     if (output.summary) summaryText = output.summary;
@@ -242,8 +239,6 @@ export async function runReviewPipeline(
   }));
 
   const resolution = resolveVerdict({
-    proposed: proposedVerdict,
-    confidence,
     intentMatch,
     findings: knobFiltered.kept,
     config: repo.config,
@@ -258,7 +253,7 @@ export async function runReviewPipeline(
   const body = buildReviewBody({
     verdict: resolution.verdict,
     summary: summaryText,
-    intentMatch: finalIntent,
+    caveat: resolution.caveat,
     newerCommits: request.newerCommitsFlag ?? false,
     shortSha: pr.headSha.slice(0, 7),
     model,

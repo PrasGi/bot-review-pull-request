@@ -29,39 +29,42 @@ function finding(overrides: Partial<FindingOutput> = {}): FindingOutput {
     severity: "minor",
     category: "bug",
     comment: "something is off here in this line",
+    blocking: false,
     ...overrides,
   };
 }
 
 describe("resolveVerdict", () => {
-  it("forces REQUEST_CHANGES when a critical finding exists", () => {
+  it("requests changes only for a blocking finding", () => {
     const r = resolveVerdict({
-      proposed: "APPROVE",
-      confidence: 0.9,
       intentMatch: { status: "match", explanation: "" },
-      findings: [finding({ severity: "critical" })],
+      findings: [finding({ severity: "critical", blocking: true })],
       config: config(),
     });
     expect(r.verdict).toBe("REQUEST_CHANGES");
-    expect(r.forced).toBe("critical_findings");
   });
 
-  it("caps to COMMENT when confidence is below threshold", () => {
+  it("approves with a caveat when an uncertain (non-blocking) issue exists", () => {
     const r = resolveVerdict({
-      proposed: "APPROVE",
-      confidence: 0.3,
       intentMatch: { status: "match", explanation: "" },
-      findings: [],
+      findings: [finding({ severity: "major", blocking: false })],
       config: config(),
     });
-    expect(r.verdict).toBe("COMMENT");
-    expect(r.forced).toBe("low_confidence");
+    expect(r.verdict).toBe("APPROVE");
+    expect(r.caveat).toBeTruthy();
+  });
+
+  it("does NOT block on a critical finding the model is unsure about", () => {
+    const r = resolveVerdict({
+      intentMatch: { status: "match", explanation: "" },
+      findings: [finding({ severity: "critical", blocking: false })],
+      config: config(),
+    });
+    expect(r.verdict).toBe("APPROVE");
   });
 
   it("forces COMMENT when autoVerdict is disabled", () => {
     const r = resolveVerdict({
-      proposed: "REQUEST_CHANGES",
-      confidence: 0.9,
       intentMatch: { status: "match", explanation: "" },
       findings: [],
       config: config({ autoVerdict: false }),
@@ -70,28 +73,34 @@ describe("resolveVerdict", () => {
     expect(r.forced).toBe("auto_verdict_off");
   });
 
-  it("forbids APPROVE on intent mismatch", () => {
+  it("approves with a caveat on intent mismatch (does not block)", () => {
     const r = resolveVerdict({
-      proposed: "APPROVE",
-      confidence: 0.9,
       intentMatch: { status: "mismatch", explanation: "hidden changes" },
       findings: [],
       config: config(),
     });
-    expect(r.verdict).toBe("COMMENT");
+    expect(r.verdict).toBe("APPROVE");
     expect(r.forced).toBe("intent_mismatch");
+    expect(r.caveat).toBeTruthy();
   });
 
-  it("passes a clean APPROVE through untouched", () => {
+  it("approves cleanly with only nits", () => {
     const r = resolveVerdict({
-      proposed: "APPROVE",
-      confidence: 0.9,
       intentMatch: { status: "match", explanation: "" },
-      findings: [finding({ severity: "nit" })],
+      findings: [finding({ severity: "nit", blocking: false })],
       config: config(),
     });
     expect(r.verdict).toBe("APPROVE");
-    expect(r.forced).toBeUndefined();
+    expect(r.caveat).toBeUndefined();
+  });
+
+  it("a blocker overrides intent mismatch", () => {
+    const r = resolveVerdict({
+      intentMatch: { status: "mismatch", explanation: "x" },
+      findings: [finding({ blocking: true })],
+      config: config(),
+    });
+    expect(r.verdict).toBe("REQUEST_CHANGES");
   });
 });
 
