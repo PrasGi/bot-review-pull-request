@@ -54,6 +54,8 @@ import {
   filterFindingsToValidLines,
   resolveVerdict,
 } from "@/lib/review/verdict";
+import { applyScopeGuard, collectRemovedLines } from "@/lib/review/scope-guard";
+import { log } from "@/lib/logger";
 import { buildReviewBody } from "@/lib/review/summary";
 import { recordAiCall } from "@/lib/review/audit";
 import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
@@ -548,21 +550,35 @@ export async function runReviewPipeline(
     newHunkLinesByPath,
   );
   const knobFiltered = enforceKnobs(lineFiltered.kept, repo.config.reviewProfile);
-  const findingsOut: Finding[] = knobFiltered.kept.map((f) => ({
+  const scoped = applyScopeGuard(knobFiltered.kept, {
+    profile: repo.config.reviewProfile,
+    removedDiffText: collectRemovedLines(kept.map((f) => f.patch)),
+    customGuidelines: repo.config.customGuidelines,
+  });
+  if (scoped.droppedCount > 0 || scoped.downgradedCount > 0) {
+    log.info("review.scope_guard", {
+      requestId: request._id.toHexString(),
+      dropped: scoped.droppedCount,
+      downgraded: scoped.downgradedCount,
+    });
+  }
+  const findingsOut: Finding[] = scoped.kept.map((f) => ({
     ...f,
     posted: true,
   }));
 
   const resolution = resolveVerdict({
     intentMatch,
-    findings: knobFiltered.kept,
+    findings: scoped.kept,
     config: repo.config,
   });
 
   const finalIntent: IntentMatch = intentMatch;
   if (!summaryText) {
     summaryText =
-      resolution.verdict === "APPROVE" ? "Looks good." : "See comments.";
+      resolution.verdict === "APPROVE"
+        ? "All good — no blocking issues found."
+        : "See comments.";
   }
 
   const skippedForBudget = [

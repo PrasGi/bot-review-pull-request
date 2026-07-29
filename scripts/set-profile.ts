@@ -1,4 +1,4 @@
-import { reposCollection } from "@/lib/db/collections";
+import { reposCollection, settingsCollection } from "@/lib/db/collections";
 import type { ReviewProfile } from "@/lib/db/types";
 
 const VALID: ReviewProfile[] = ["chill", "normal", "professional", "expert"];
@@ -19,8 +19,14 @@ async function main(): Promise<void> {
     { $set: { "config.reviewProfile": profile, updatedAt: new Date() } },
   );
 
+  const settings = await settingsCollection();
+  await settings.updateOne(
+    { _id: "global" },
+    { $set: { defaultReviewProfile: profile, updatedAt: new Date() } },
+  );
+
   process.stdout.write(
-    `Set reviewProfile="${profile}" on ${result.modifiedCount} repos (matched ${result.matchedCount}).\n`,
+    `Set reviewProfile="${profile}" on ${result.modifiedCount} repos (matched ${result.matchedCount}) + settings default.\n`,
   );
   process.exit(0);
 }

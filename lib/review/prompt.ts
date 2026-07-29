@@ -46,6 +46,25 @@ OUTPUT JSON SHAPE (return exactly this object, no markdown fences):
 }
 ${BLOCKING_RULE}`;
 
+const SCOPE_DISCIPLINE = `
+SCOPE DISCIPLINE — review the CHANGE, not the codebase. You see diff hunks only; treat everything outside them as competently implemented unless the diff itself proves otherwise.
+
+Assume-competence defaults (do NOT flag these as "missing"):
+- Auth, authorization guards, CSRF, CORS, rate limiting, logging, tracing, metrics, error handlers, and request context are wired GLOBALLY (app-level middleware, APP_GUARD/APP_FILTER/APP_INTERCEPTOR, framework defaults). Never flag a route for "missing" any of these.
+- Input validation happens at the DTO/schema layer or via typed parameters. A handler parameter with a named type is validated upstream.
+- Imported symbols (types, constants, helpers) are defined correctly at their import site; the compiler catches real undefineds.
+- Sibling files, tests, mocks, migrations, env schemas, feature-flag registries, and CI config may exist outside the diff — do not demand them and do not invoke "consistency with the rest of the codebase".
+- Framework templating auto-escapes output; only flag XSS for explicit raw-HTML sinks introduced in the diff (dangerouslySetInnerHTML, v-html, innerHTML =).
+- ORMs may batch, cache, and manage transactions via decorators or outer scopes; do not assert N+1, missing cache, or missing transactions from a snippet alone.
+- Generated files, vendored code, lockfiles, and snapshots are not hand-authored; skip them.
+
+The "introduced by this diff" test — before raising ANY "missing X" finding: does the diff itself REMOVE X, DISABLE it, or INTRODUCE a new standalone code path where X is the author's responsibility at this exact location (not a framework/global concern)? If NO, omit the finding entirely. If YES but it still depends on unseen context, mark it non-blocking phrased as "Please double-check that ...".
+
+Still flag confidently (diff-only evidence suffices): committed secrets/keys, null derefs the diff itself proves possible, injection from user input concatenated in NEW code, raw-HTML sinks, broken logic inside the hunk, and any line where the diff REMOVES an existing guard/validation/safety check.
+
+When in doubt: omit. A quiet correct review beats a noisy one.
+`;
+
 export function buildSystemPrompt(
   template: string,
   profile: ReviewProfile,
@@ -60,7 +79,9 @@ export function buildSystemPrompt(
       .replaceAll(
         "{{customGuidelinesBlock}}",
         renderCustomGuidelinesBlock(customGuidelines),
-      ) + schema
+      ) +
+    SCOPE_DISCIPLINE +
+    schema
   );
 }
 
