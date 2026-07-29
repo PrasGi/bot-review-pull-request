@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR from 'swr';
+import { ExternalLink } from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Badge } from '@/components/ui/Badge';
@@ -11,18 +12,22 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
-
+import { Tooltip } from '@/components/ui/Tooltip';
 
 type RequestListItem = {
   id: string;
   prNumber: number;
   prTitle: string;
+  prAuthor: string;
+  prUrl: string;
   repoFullName: string;
   status: string;
   kind: string;
   trigger: string;
   createdAt: string;
+  startedAt?: string;
   finishedAt?: string;
+  durationMs?: number;
   verdict?: string;
   costUsd: number;
 };
@@ -68,6 +73,26 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatDateAbsolute(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  const remSecs = secs % 60;
+  if (remSecs === 0) return `${mins}m`;
+  return `${mins}m ${remSecs}s`;
+}
+
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
   { value: 'queued', label: 'Queued' },
@@ -87,12 +112,15 @@ function SkeletonRows(): React.ReactElement {
     <>
       {SKELETON_KEYS.map((key) => (
         <tr key={key}>
-          <td className="px-4 py-3"><Skeleton className="h-4 w-48" /></td>
-          <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-          <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
-          <td className="px-4 py-3"><Skeleton className="h-5 w-24 rounded-full" /></td>
-          <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
-          <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+          <td className="px-4 py-3.5">
+            <Skeleton className="h-4 w-56 mb-2" />
+            <Skeleton className="h-3 w-40" />
+          </td>
+          <td className="px-4 py-3.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
+          <td className="px-4 py-3.5"><Skeleton className="h-5 w-24 rounded-full" /></td>
+          <td className="px-4 py-3.5"><Skeleton className="h-4 w-14" /></td>
+          <td className="px-4 py-3.5"><Skeleton className="h-4 w-16" /></td>
+          <td className="px-4 py-3.5"><Skeleton className="h-4 w-16" /></td>
         </tr>
       ))}
     </>
@@ -152,18 +180,32 @@ export default function RequestsPage(): React.ReactElement {
 
   const { data, error, isLoading } = useSWR<RequestListResult, FetchError>(
     apiUrl,
-    fetcher
+    fetcher,
+    { refreshInterval: 5000, keepPreviousData: true }
   );
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-[var(--text)]">Review Requests</h1>
-        <p className="text-sm text-[var(--text-muted)]">
-          All PR review requests across your repositories
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold text-[var(--text)]">Review Requests</h1>
+          <p className="text-sm text-[var(--text-muted)]">
+            All PR review requests across your repositories
+          </p>
+        </div>
+        <div
+          role="status"
+          className="flex items-center gap-1.5 self-center"
+          aria-label="Auto-refreshing every 5 seconds"
+        >
+          <span className="relative flex h-2 w-2" aria-hidden="true">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[oklch(0.70_0.15_142)] opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[oklch(0.60_0.15_142)]" />
+          </span>
+          <span className="text-xs text-[var(--text-muted)]">Live · updates every 5s</span>
+        </div>
       </div>
 
       <GlassCard className="p-0 overflow-hidden">
@@ -194,13 +236,13 @@ export default function RequestsPage(): React.ReactElement {
                   Pull Request
                 </th>
                 <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
-                  Repository
-                </th>
-                <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
                   Status
                 </th>
                 <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
                   Verdict
+                </th>
+                <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
+                  Duration
                 </th>
                 <th scope="col" className="px-4 py-3 text-right font-medium text-[var(--text-muted)] tabular-nums">
                   Cost
@@ -214,54 +256,92 @@ export default function RequestsPage(): React.ReactElement {
               {isLoading ? (
                 <SkeletonRows />
               ) : error ? null : data && data.items.length === 0 ? null : (
-                data?.items.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-[var(--nav-hover)] transition-colors"
-                  >
-                    <td className="px-4 py-3 max-w-xs">
-                      <Link
-                        href={`/requests/${item.id}`}
-                        className="block hover:text-[var(--accent)] transition-colors"
-                      >
-                        <span className="font-medium text-[var(--text)] truncate block">
-                          #{item.prNumber}{' '}
-                          <span className="truncate">{item.prTitle}</span>
-                        </span>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-muted)] truncate max-w-[180px]">
-                      {item.repoFullName}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={statusVariant(item.status)}>
-                        {item.status.replace(/_/g, ' ')}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.verdict ? (
-                        <Badge variant={verdictVariant(item.verdict)}>
-                          {item.verdict.replace(/_/g, ' ')}
+                data?.items.map((item) => {
+                  const inFlight = item.status === 'processing' || item.status === 'queued';
+                  return (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-[var(--nav-hover)] transition-colors group"
+                    >
+                      <td className="px-4 py-3.5 max-w-sm">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Link
+                            href={`/requests/${item.id}`}
+                            className="font-medium text-[var(--text)] hover:text-[var(--accent)] transition-colors truncate"
+                          >
+                            #{item.prNumber} {item.prTitle}
+                          </Link>
+                          <a
+                            href={item.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Open PR #${item.prNumber} on GitHub (opens in new tab)`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                          </a>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-[var(--text-muted)]">
+                          <span className="truncate max-w-[180px]">{item.repoFullName}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>@{item.prAuthor}</span>
+                          <span aria-hidden="true">·</span>
+                          <Badge variant="neutral">{item.kind.replace(/_/g, ' ')}</Badge>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge
+                          variant={statusVariant(item.status)}
+                          className={inFlight ? 'animate-pulse' : undefined}
+                        >
+                          {item.status.replace(/_/g, ' ')}
                         </Badge>
-                      ) : (
-                        <span className="text-[var(--text-muted)]">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-[var(--text-muted)]">
-                      {formatCost(item.costUsd)}
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-muted)] whitespace-nowrap">
-                      <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {item.verdict ? (
+                          <Badge variant={verdictVariant(item.verdict)}>
+                            {item.verdict.replace(/_/g, ' ')}
+                          </Badge>
+                        ) : (
+                          <span className="text-[var(--text-muted)]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 tabular-nums text-[var(--text-muted)] whitespace-nowrap">
+                        {item.durationMs !== undefined ? (
+                          <Tooltip
+                            content={
+                              item.finishedAt
+                                ? `${formatDateAbsolute(item.createdAt)} → ${formatDateAbsolute(item.finishedAt)}`
+                                : formatDateAbsolute(item.createdAt)
+                            }
+                          >
+                            <span>{formatDuration(item.durationMs)}</span>
+                          </Tooltip>
+                        ) : inFlight ? (
+                          <span className="italic text-xs">running…</span>
+                        ) : (
+                          <span>—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-[var(--text-muted)]">
+                        {formatCost(item.costUsd)}
+                      </td>
+                      <td className="px-4 py-3.5 text-[var(--text-muted)] whitespace-nowrap">
+                        <Tooltip content={formatDateAbsolute(item.createdAt)}>
+                          <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
+                        </Tooltip>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
 
           {!isLoading && error && (
             <div className="p-6 text-center">
-              <p className="text-sm text-[oklch(0.60_0.20_25)]">{error.message}</p>
+              <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">{error.message}</p>
             </div>
           )}
 

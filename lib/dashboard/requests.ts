@@ -17,12 +17,16 @@ export interface RequestListItem {
   id: string;
   prNumber: number;
   prTitle: string;
+  prAuthor: string;
+  prUrl: string;
   repoFullName: string;
   status: string;
   kind: string;
   trigger: string;
   createdAt: string;
+  startedAt?: string;
   finishedAt?: string;
+  durationMs?: number;
   verdict?: string;
   costUsd: number;
 }
@@ -94,12 +98,18 @@ export async function listRequests(
     id: d._id.toHexString(),
     prNumber: d.prNumber,
     prTitle: d.prTitle,
+    prAuthor: d.prAuthor,
+    prUrl: d.prUrl,
     repoFullName: repoName.get(d.repoId.toHexString()) ?? "unknown",
     status: d.status,
     kind: d.kind,
     trigger: d.trigger,
     createdAt: d.createdAt.toISOString(),
+    ...(d.startedAt ? { startedAt: d.startedAt.toISOString() } : {}),
     ...(d.finishedAt ? { finishedAt: d.finishedAt.toISOString() } : {}),
+    ...(d.finishedAt
+      ? { durationMs: d.finishedAt.getTime() - d.createdAt.getTime() }
+      : {}),
     ...(verdictByReq.has(d._id.toHexString())
       ? { verdict: verdictByReq.get(d._id.toHexString()) }
       : {}),
