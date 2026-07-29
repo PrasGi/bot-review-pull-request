@@ -143,6 +143,20 @@ pnpm connect
 It prints the install URL; open it, pick your account and repositories, and the OAuth
 callback stores the connection.
 
+### Organization repos (owner approval)
+
+Installing on an org you are only a *member* of creates a **pending request** — an
+org owner must approve it in GitHub. Because "Request user authorization (OAuth)
+during installation" is enabled, GitHub does not allow a separate Setup URL; all
+post-install redirects go through the Callback URL (`/api/github/callback`).
+
+When the owner approves, GitHub redirects **their** browser to the callback with no
+CSRF state cookie (they never clicked Connect). The callback detects this, does NOT
+exchange tokens, and sends them to the public `/connected` info page. The org's repos
+are synced from the `installation.created` webhook — no dashboard action is needed.
+The requesting user's own connection (identity + token) is captured when they run the
+connect flow themselves.
+
 ---
 
 ## 10. Usage rollup cron
