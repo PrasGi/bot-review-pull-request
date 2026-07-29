@@ -28,7 +28,7 @@ export const GET = withGuard(async () => {
       return {
         id: c._id.toHexString(),
         githubLogin: c.githubLogin,
-        displayName: c.displayName,
+        displayName: c.displayName || c.githubLogin,
         avatarUrl: c.avatarUrl,
         reconnectRequired: c.reconnectRequired ?? false,
         refreshTokenExpiresAt: c.refreshTokenExpiresAt.toISOString(),

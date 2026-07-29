@@ -1088,19 +1088,38 @@ Centered glass card (max-w-sm) on gradient page bg: logo, email + password field
 - [ ] REST endpoints: stats (KPIs, charts aggregations), requests list (filters/search/pagination) + detail + retry, usage aggregations (group-by model/repo/day) + CSV, accounts (list, disconnect, reconnect-URL), repos (list, enable/disable, config update incl. reviewProfile), settings (keys masked, pricing table, prompt templates)
 - [ ] Shared zod schemas (client+server) in `lib/schemas`
 
-### Phase 5 — Dashboard UI `[ ]`
-- [ ] Design tokens + glass primitives + dark/light theming (§5.1) — GlassCard, Badge, Tooltip, Skeleton, Toast, Dialog, Switch, Select, Table
-- [ ] App shell: sidebar (expanded/rail/drawer per §5.3), header, theme toggle, ⌘B, localStorage persistence
-- [ ] Pages in order: Login (§5.8) → Dashboard (§5.4) → Requests list+detail (§5.5) → AI Usage (§5.6) → Projects (§5.7) → Settings
-- [ ] Polling (SWR 10–15s), skeletons/empty/error states per region, toasts, confirm dialogs
-- [ ] Responsive pass (mobile cards, drawer, touch targets) + a11y pass (contrast both themes, keyboard)
+### Phase 5 — Dashboard UI `[x]`
+> Shipped + deployed. Shell wiring (ThemeProvider, Toaster, `(dashboard)` route
+> group with server-side auth guard, SWR fetcher). All pages built: Login,
+> Dashboard (stats/charts/attention), Requests list+detail (URL-as-state filters,
+> findings, AI-call inspector, retry), AI Usage (CSV export), Projects
+> (accounts + per-repo config editor + search & pagination over ~94 repos),
+> Settings. Hardened a runtime crash: repos with missing/partial `config` now
+> default via `defaultRepoConfig()` in the repos API (+ client guards).
+- [x] Design tokens + glass primitives + dark/light theming (§5.1)
+- [x] App shell: sidebar, header, theme toggle, ⌘B, localStorage persistence
+- [x] Pages: Login → Dashboard → Requests list+detail → AI Usage → Projects → Settings
+- [x] SWR fetching, skeletons/empty/error states per region, toasts, confirm dialogs
+- [x] Responsive + a11y pass; Projects search + pagination for large repo counts
 
-### Phase 6 — Hardening & Polish `[ ]`
-- [ ] Exact tokenizers (tiktoken / Anthropic count API) replacing chars/4
-- [ ] Connection health: reconnectRequired warnings (attention strip + Projects chips), refresh-token near-expiry (6mo) warning, webhook liveness (lastEventAt stale marker)
-- [ ] Daily cost budget alert, ai_calls prompt purge job, structured logs
-- [ ] Retry/backoff tuning vs real rate limits; Vercel Pro / durable queue (Inngest/QStash) decision if Hobby ceiling is hit in practice
-- [ ] docs/setup.md finalized (GitHub App registration + deploy runbook)
+### Phase 6 — Hardening & Polish `[x]`
+> Done. Tokenizer: `js-tiktoken` cl100k_base as sync counter for all providers
+> (`lib/review/tokenizer.ts`), per-provider budget multipliers (openai 1.0 / glm
+> 1.08 / kimi 1.12 / anthropic 1.25) applied via `effectiveBudget` in pipeline;
+> encode→slice→decode truncation; >12k-char fallback to char heuristic (js-tiktoken
+> BPE is ~18s on 18k low-entropy chars — protects the 180s contract). Connection
+> health: `lastEventAt` written on enqueue, 14-day refresh-token near-expiry + 7-day
+> repo-staleness surfaced in dashboard attention strip. Cost budget alert (today's
+> spend vs `dailyCostAlertUsd`) as a dashboard progress bar. `usage_daily` rollup
+> cron (`/api/cron/rollup`, `vercel.json` `0 1 * * *`, CRON_SECRET-guarded) so usage
+> survives the 30-day ai_calls TTL. Structured JSON logger (`lib/logger.ts`) on the
+> pipeline runner. Retry/backoff util (`lib/util/retry.ts`, 429/5xx + Retry-After)
+> wired into GitHub API. Queue decision: stay Hobby+after()+reaper — see docs/scaling.md.
+- [x] Exact tokenizers (tiktoken / Anthropic count API) replacing chars/4 — js-tiktoken cl100k for all providers (Anthropic API skipped on hot path per latency budget; 1.25× multiplier compensates)
+- [x] Connection health: reconnectRequired warnings (attention strip), refresh-token near-expiry (14d) warning, webhook liveness (lastEventAt stale marker, 7d)
+- [x] Daily cost budget alert, ai_calls prompt purge job (existing 30d TTL + usage_daily rollup), structured logs
+- [x] Retry/backoff tuning vs real rate limits (lib/util/retry.ts); Vercel Pro / durable queue decision documented in docs/scaling.md with revisit triggers
+- [x] docs/setup.md finalized (GitHub App registration + deploy runbook + CRON_SECRET + rollup cron)
 
 ---
 

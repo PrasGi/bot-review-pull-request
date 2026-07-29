@@ -57,6 +57,7 @@ vi.mock("@/lib/db/collections", () => ({
   }),
   reposCollection: async () => ({
     findOne: async () => repo,
+    updateOne: async () => ({ modifiedCount: 1 }),
   }),
   userConnectionsCollection: async () => ({
     findOne: async (query: { githubUserId?: number }) =>

@@ -25,6 +25,7 @@ import type { PrFile } from "@/lib/review/diff-format";
 import { formatFilesForPrompt } from "@/lib/review/diff-format";
 import { filterFiles } from "@/lib/review/filter";
 import { chunkFiles } from "@/lib/review/chunk";
+import { effectiveBudget } from "@/lib/review/tokenizer";
 import { resolveModel } from "@/lib/ai/factory";
 import { computeCostUsd } from "@/lib/ai/provider";
 import {
@@ -241,8 +242,8 @@ export async function runReviewPipeline(
   }
 
   const { chunks, unreviewed } = chunkFiles(kept, {
-    chunkTokens: CHUNK_TOKENS,
-    totalInputBudget: TOTAL_INPUT_BUDGET_TOKENS,
+    chunkTokens: effectiveBudget(CHUNK_TOKENS, provider),
+    totalInputBudget: effectiveBudget(TOTAL_INPUT_BUDGET_TOKENS, provider),
     maxChunks: Math.min(repo.config.maxChunks, MAX_PARALLEL_CHUNKS),
   });
 

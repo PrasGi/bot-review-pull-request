@@ -94,7 +94,13 @@ TOKEN_ENCRYPTION_KEY=...
 SESSION_SECRET=...
 APP_URL=https://your-app.vercel.app
 GLM_API_KEY=...
+CRON_SECRET=...
 ```
+
+> Generate `CRON_SECRET` with `openssl rand -base64 32`. It authorizes the daily
+> usage-rollup cron (`/api/cron/rollup`). On Vercel Pro the platform sends it
+> automatically; on Hobby, trigger the endpoint from any external scheduler with
+> an `Authorization: Bearer <CRON_SECRET>` header.
 
 ---
 
@@ -121,13 +127,28 @@ re-running preserves existing provider keys, pricing, and templates.
 
 ---
 
-## 9. Connect a GitHub account (after the dashboard exists)
+## 9. Connect a GitHub account
 
-Until the dashboard "Connect with GitHub" button ships, use the CLI (added in Phase 0):
+Sign in to the dashboard (`/login`, using the seeded admin credentials), open
+**Projects**, and click **Connect GitHub account**. Pick the account and
+repositories in GitHub's native picker; the OAuth callback stores the connection.
+Repeat for the second account.
+
+CLI alternative (headless / scripted):
 
 ```bash
 pnpm connect
 ```
 
 It prints the install URL; open it, pick your account and repositories, and the OAuth
-callback stores the connection. Repeat for the second account.
+callback stores the connection.
+
+---
+
+## 10. Usage rollup cron
+
+The daily cron at `/api/cron/rollup` (see `vercel.json`, `0 1 * * *`) aggregates
+`ai_calls` into the permanent `usage_daily` collection so the AI Usage page
+survives the 30-day `ai_calls` TTL purge. On Vercel Pro this runs automatically;
+on Hobby, point an external scheduler at the endpoint with the `CRON_SECRET`
+bearer header (see §6). No action needed beyond setting `CRON_SECRET`.

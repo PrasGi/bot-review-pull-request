@@ -87,8 +87,8 @@ function configToForm(config: RepoConfig): FormState {
     autoVerdict: config.autoVerdict,
     confidenceThreshold: config.confidenceThreshold,
     customGuidelines: config.customGuidelines,
-    ignorePatternsText: config.ignorePatterns.join('\n'),
-    contextFilesText: config.contextFiles.join('\n'),
+    ignorePatternsText: (config.ignorePatterns ?? []).join('\n'),
+    contextFilesText: (config.contextFiles ?? []).join('\n'),
     maxChunks: config.maxChunks,
   };
 }

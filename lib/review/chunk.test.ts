@@ -1,6 +1,18 @@
-import { describe, it, expect } from "vitest";
-import { chunkFiles, prioritizeFiles } from "@/lib/review/chunk";
+import { describe, it, expect, vi } from "vitest";
 import type { PrFile } from "@/lib/review/diff-format";
+
+const MARKER = "\n... [diff truncated for size]";
+
+vi.mock("@/lib/review/tokenizer", () => ({
+  countTokens: (text: string): number => Math.ceil(text.length / 3),
+  truncateToTokens: (text: string, maxTokens: number): string => {
+    const markerTokens = Math.ceil(MARKER.length / 3);
+    const budgetChars = Math.max(0, (maxTokens - markerTokens) * 3);
+    return `${text.slice(0, budgetChars)}${MARKER}`;
+  },
+}));
+
+const { chunkFiles, prioritizeFiles } = await import("@/lib/review/chunk");
 
 function file(name: string, patchLen: number): PrFile {
   return {

@@ -1,3 +1,10 @@
+import {
+  withRetry,
+  HttpError,
+  isRetryableStatus,
+  parseRetryAfter,
+} from "@/lib/util/retry";
+
 const API_BASE = "https://api.github.com";
 
 export interface GitHubUser {
@@ -34,17 +41,34 @@ interface UserInstallationsResponse {
 }
 
 async function githubGet<T>(path: string, accessToken: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
+  return withRetry(
+    async () => {
+      const res = await fetch(`${API_BASE}${path}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      });
+      if (!res.ok) {
+        throw new HttpError(
+          res.status,
+          `GitHub API ${path} returned ${res.status}`,
+          parseRetryAfter(res.headers.get("retry-after")),
+        );
+      }
+      return (await res.json()) as T;
     },
-  });
-  if (!res.ok) {
-    throw new Error(`GitHub API ${path} returned ${res.status}`);
-  }
-  return (await res.json()) as T;
+    {
+      maxAttempts: 3,
+      baseDelayMs: 1_000,
+      maxDelayMs: 10_000,
+      isRetryable: (error) =>
+        error instanceof HttpError && isRetryableStatus(error.status),
+      retryAfterMs: (error) =>
+        error instanceof HttpError ? error.retryAfterMs : null,
+    },
+  );
 }
 
 export async function fetchAuthenticatedUser(

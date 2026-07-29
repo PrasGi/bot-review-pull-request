@@ -1,14 +1,16 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR from 'swr';
-import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2 } from 'lucide-react';
+import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2, Search } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { toast } from '@/components/ui/Toast';
+import { Input } from '@/components/ui/Input';
 import { fetcher, mutateJson, FetchError } from '@/lib/ui/swr';
 import { RepoConfigDialog } from './RepoConfigDialog';
 import type { RepoConfig } from './RepoConfigDialog';
@@ -52,8 +54,8 @@ type ReposResponse = {
 
 function AccountAvatar({ account }: { account: Account }): React.ReactElement {
   const initial = (
-    account.displayName.charAt(0) ||
-    account.githubLogin.charAt(0) ||
+    (account.displayName ?? '').charAt(0) ||
+    (account.githubLogin ?? '').charAt(0) ||
     '?'
   ).toUpperCase();
 
@@ -324,6 +326,8 @@ function RepoGroup({
   );
 }
 
+const PAGE_SIZE = 15;
+
 function ReposSkeleton(): React.ReactElement {
   return (
     <div className="flex flex-col gap-4">
@@ -345,6 +349,15 @@ function ReposSkeleton(): React.ReactElement {
 }
 
 function ReposSection(): React.ReactElement {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const q = searchParams.get('q') ?? '';
+  const rawPage = parseInt(searchParams.get('page') ?? '1', 10);
+
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const { data, error, isLoading, mutate } = useSWR<ReposResponse>(
     '/api/dashboard/repos',
     fetcher
@@ -366,26 +379,89 @@ function ReposSection(): React.ReactElement {
     void mutate();
   };
 
-  const grouped = React.useMemo<[string, Repo[]][]>(() => {
+  function pushParams(updates: Record<string, string>): void {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(updates)) {
+      if (v) {
+        params.set(k, v);
+      } else {
+        params.delete(k);
+      }
+    }
+    params.set('page', '1');
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>): void {
+    const val = e.target.value;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      pushParams({ q: val });
+    }, 300);
+  }
+
+  function goToPage(next: number): void {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('page', String(next));
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  const filteredRepos = React.useMemo<Repo[]>(() => {
     if (!data) return [];
+    if (!q) return data.repos;
+    const lower = q.toLowerCase();
+    return data.repos.filter((r) => r.fullName.toLowerCase().includes(lower));
+  }, [data, q]);
+
+  const totalFiltered = filteredRepos.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+  const page = Math.min(Math.max(Number.isNaN(rawPage) ? 1 : rawPage, 1), totalPages);
+
+  const grouped = React.useMemo<[string, Repo[]][]>(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    const end = Math.min(start + PAGE_SIZE, filteredRepos.length);
+    const slice = filteredRepos.slice(start, end);
     const map = new Map<string, Repo[]>();
-    for (const repo of data.repos) {
+    for (const repo of slice) {
       const list = map.get(repo.accountLogin) ?? [];
       list.push(repo);
       map.set(repo.accountLogin, list);
     }
     return Array.from(map.entries());
-  }, [data]);
+  }, [filteredRepos, page]);
+
+  const showingFrom = totalFiltered === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const showingTo = Math.min(page * PAGE_SIZE, totalFiltered);
 
   return (
     <section aria-labelledby="repos-heading">
-      <div className="mb-4">
-        <h2 id="repos-heading" className="text-lg font-semibold text-[var(--text)]">
-          Repositories
-        </h2>
-        <p className="mt-0.5 text-sm text-[var(--text-muted)]">
-          Manage per-repository review configuration.
-        </p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="repos-heading" className="text-lg font-semibold text-[var(--text)]">
+            Repositories
+          </h2>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">
+            Manage per-repository review configuration.
+          </p>
+        </div>
+        {data && data.repos.length > 0 && (
+          <div className="relative w-full sm:w-72">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] pointer-events-none"
+              aria-hidden="true"
+            />
+            <Input
+              key={q}
+              id="repo-search"
+              type="search"
+              placeholder="Search repositories…"
+              defaultValue={q}
+              onChange={handleSearchChange}
+              className="pl-9"
+              aria-label="Search repositories"
+            />
+          </div>
+        )}
       </div>
 
       {isLoading && <ReposSkeleton />}
@@ -414,18 +490,61 @@ function ReposSection(): React.ReactElement {
         </GlassCard>
       )}
 
-      {data && data.repos.length > 0 && (
-        <div className="flex flex-col gap-4">
-          {grouped.map(([accountLogin, repos]) => (
-            <RepoGroup
-              key={accountLogin}
-              accountLogin={accountLogin}
-              repos={repos}
-              onToggle={handleToggle}
-              onConfigSaved={handleConfigSaved}
-            />
-          ))}
-        </div>
+      {data && data.repos.length > 0 && filteredRepos.length === 0 && (
+        <GlassCard className="flex flex-col items-center gap-4 py-12 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-subtle)]">
+            <Search className="h-6 w-6 text-[var(--accent)]" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="font-medium text-[var(--text)]">No repositories match</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Try a different search term.
+            </p>
+          </div>
+        </GlassCard>
+      )}
+
+      {data && filteredRepos.length > 0 && (
+        <>
+          <div className="flex flex-col gap-4">
+            {grouped.map(([accountLogin, repos]) => (
+              <RepoGroup
+                key={accountLogin}
+                accountLogin={accountLogin}
+                repos={repos}
+                onToggle={handleToggle}
+                onConfigSaved={handleConfigSaved}
+              />
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between mt-4 px-1">
+            <p className="text-xs text-[var(--text-muted)] tabular-nums">
+              Showing {showingFrom}–{showingTo} of {totalFiltered}{' '}
+              {totalFiltered === 1 ? 'repository' : 'repositories'}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => goToPage(page - 1)}
+                disabled={page <= 1}
+                aria-label="Previous page"
+              >
+                Prev
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => goToPage(page + 1)}
+                disabled={page >= totalPages}
+                aria-label="Next page"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </>
       )}
     </section>
   );

@@ -2,6 +2,7 @@ import type { ObjectId } from "mongodb";
 import { reviewRequestsCollection } from "@/lib/db/collections";
 import type { ReviewRequestDoc } from "@/lib/db/types";
 import { runReviewPipeline } from "@/lib/review/pipeline";
+import { log, errorFields } from "@/lib/logger";
 
 async function claim(requestId: ObjectId): Promise<ReviewRequestDoc | null> {
   const requests = await reviewRequestsCollection();
@@ -43,6 +44,15 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
   const request = await claim(requestId);
   if (!request) return;
 
+  const requestIdHex = requestId.toHexString();
+  const startedAt = Date.now();
+  log.info("review.pipeline.start", {
+    requestId: requestIdHex,
+    repoId: request.repoId.toHexString(),
+    prNumber: request.prNumber,
+    kind: request.kind,
+  });
+
   const heartbeat = async (): Promise<void> => {
     const requests = await reviewRequestsCollection();
     await requests.updateOne(
@@ -54,8 +64,17 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
   try {
     await runReviewPipeline(request, heartbeat);
     await markCompleted(requestId);
+    log.info("review.pipeline.completed", {
+      requestId: requestIdHex,
+      durationMs: Date.now() - startedAt,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
     await markFailed(requestId, "pipeline", message);
+    log.error("review.pipeline.failed", {
+      requestId: requestIdHex,
+      durationMs: Date.now() - startedAt,
+      ...errorFields(error),
+    });
   }
 }

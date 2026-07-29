@@ -20,6 +20,9 @@ const envSchema = z.object({
 
   APP_URL: z.url().default("http://localhost:3000"),
 
+  // Secures the Vercel cron rollup endpoint. Optional locally; set in production.
+  CRON_SECRET: z.string().default(""),
+
   // Optional in env: providers may instead be configured (encrypted) via the
   // dashboard settings. Presence is enforced at review time, not at boot.
   GLM_API_KEY: z.string().optional(),

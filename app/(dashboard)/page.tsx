@@ -24,8 +24,11 @@ import {
   AlertTriangle,
   CheckCheck,
   PlugZap,
+  Clock,
+  WifiOff,
 } from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
+import { cn } from '@/lib/ui/cn';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
@@ -37,7 +40,13 @@ type DashboardStats = {
   avgReviewSeconds: number;
   reviewsPerDay: { date: string; completed: number; failed: number }[];
   verdictDistribution: { verdict: string; count: number }[];
-  attention: { reconnectAccounts: string[]; failedLast24h: number };
+  attention: {
+    reconnectAccounts: string[];
+    refreshExpiringAccounts: { githubLogin: string; expiresAt: string }[];
+    staleRepos: string[];
+    failedLast24h: number;
+  };
+  budgetAlert: { thresholdUsd: number; todayUsd: number } | null;
 };
 
 const VERDICT_COLORS: Record<string, string> = {
@@ -168,10 +177,20 @@ export default function DashboardPage(): React.ReactElement {
     reviewsPerDay,
     verdictDistribution,
     attention,
+    budgetAlert,
   } = data;
 
+  const budgetPct = budgetAlert
+    ? Math.min(100, (budgetAlert.todayUsd / budgetAlert.thresholdUsd) * 100)
+    : 0;
+  const budgetOver = budgetAlert ? budgetAlert.todayUsd > budgetAlert.thresholdUsd : false;
+  const budgetWarn = budgetPct >= 80;
+
   const hasAttentionItems =
-    attention.reconnectAccounts.length > 0 || attention.failedLast24h > 0;
+    attention.reconnectAccounts.length > 0 ||
+    attention.refreshExpiringAccounts.length > 0 ||
+    attention.staleRepos.length > 0 ||
+    attention.failedLast24h > 0;
 
   return (
     <main className="flex flex-col gap-6 p-6">
@@ -199,6 +218,55 @@ export default function DashboardPage(): React.ReactElement {
           />
         </div>
       </section>
+
+      {budgetAlert && (
+        <section aria-label="Daily budget">
+          <GlassCard>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-[var(--text)]">
+                Daily Cost Budget
+              </h2>
+              <span
+                className={cn(
+                  'text-sm tabular-nums font-medium',
+                  budgetOver
+                    ? 'text-[oklch(0.60_0.20_25)]'
+                    : budgetWarn
+                      ? 'text-[oklch(0.55_0.14_85)]'
+                      : 'text-[var(--text-muted)]'
+                )}
+              >
+                {formatCost(budgetAlert.todayUsd)} / {formatCost(budgetAlert.thresholdUsd)}
+              </span>
+            </div>
+            <div
+              className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--nav-hover)]"
+              role="progressbar"
+              aria-valuenow={Math.round(budgetPct)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Daily cost budget usage"
+            >
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all',
+                  budgetOver
+                    ? 'bg-[oklch(0.60_0.20_25)]'
+                    : budgetWarn
+                      ? 'bg-[oklch(0.80_0.12_85)]'
+                      : 'bg-[var(--accent)]'
+                )}
+                style={{ width: `${budgetPct}%` }}
+              />
+            </div>
+            {budgetOver && (
+              <p className="mt-2 text-xs text-[oklch(0.60_0.20_25)]">
+                Daily spend has exceeded the configured budget.
+              </p>
+            )}
+          </GlassCard>
+        </section>
+      )}
 
       <section aria-label="Charts">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -304,6 +372,60 @@ export default function DashboardPage(): React.ReactElement {
                       className="text-sm font-medium text-[var(--accent)] underline-offset-2 hover:underline"
                     >
                       Manage in Projects →
+                    </Link>
+                  </div>
+                </div>
+              )}
+              {attention.refreshExpiringAccounts.length > 0 && (
+                <div className="flex items-start gap-3 rounded-xl border border-[oklch(0.80_0.12_85/0.3)] bg-[oklch(0.80_0.12_85/0.08)] p-4">
+                  <Clock
+                    className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(0.55_0.14_85)]"
+                    aria-hidden="true"
+                  />
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-medium text-[var(--text)]">
+                      {attention.refreshExpiringAccounts.length} GitHub connection
+                      {attention.refreshExpiringAccounts.length > 1 ? 's' : ''} expiring soon
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {attention.refreshExpiringAccounts.map((acc) => (
+                        <Badge key={acc.githubLogin} variant="warning">
+                          {acc.githubLogin} · {new Date(acc.expiresAt).toLocaleDateString()}
+                        </Badge>
+                      ))}
+                    </div>
+                    <Link
+                      href="/projects"
+                      className="text-sm font-medium text-[var(--accent)] underline-offset-2 hover:underline"
+                    >
+                      Reconnect in Projects →
+                    </Link>
+                  </div>
+                </div>
+              )}
+              {attention.staleRepos.length > 0 && (
+                <div className="flex items-start gap-3 rounded-xl border border-[var(--glass-border)] bg-[var(--nav-hover)] p-4">
+                  <WifiOff
+                    className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-muted)]"
+                    aria-hidden="true"
+                  />
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-medium text-[var(--text)]">
+                      {attention.staleRepos.length} repositor
+                      {attention.staleRepos.length > 1 ? 'ies have' : 'y has'} no recent webhook events
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {attention.staleRepos.map((name) => (
+                        <Badge key={name} variant="neutral">
+                          {name}
+                        </Badge>
+                      ))}
+                    </div>
+                    <Link
+                      href="/projects"
+                      className="text-sm font-medium text-[var(--accent)] underline-offset-2 hover:underline"
+                    >
+                      Check webhook config →
                     </Link>
                   </div>
                 </div>

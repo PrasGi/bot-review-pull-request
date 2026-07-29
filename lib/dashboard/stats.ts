@@ -3,7 +3,12 @@ import {
   reviewsCollection,
   aiCallsCollection,
   userConnectionsCollection,
+  reposCollection,
+  settingsCollection,
 } from "@/lib/db/collections";
+
+const REFRESH_EXPIRY_WARN_MS = 14 * 24 * 60 * 60 * 1000;
+const REPO_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface DashboardStats {
   reviewsToday: number;
@@ -14,8 +19,11 @@ export interface DashboardStats {
   verdictDistribution: { verdict: string; count: number }[];
   attention: {
     reconnectAccounts: string[];
+    refreshExpiringAccounts: { githubLogin: string; expiresAt: string }[];
+    staleRepos: string[];
     failedLast24h: number;
   };
+  budgetAlert: { thresholdUsd: number; todayUsd: number } | null;
 }
 
 function startOfDay(offsetDays = 0): Date {
@@ -109,10 +117,56 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const reconnectDocs = await connections
     .find({ reconnectRequired: true }, { projection: { githubLogin: 1 } })
     .toArray();
+
+  const expiryCutoff = new Date(Date.now() + REFRESH_EXPIRY_WARN_MS);
+  const expiringDocs = await connections
+    .find(
+      {
+        reconnectRequired: { $ne: true },
+        refreshTokenExpiresAt: { $lte: expiryCutoff },
+      },
+      { projection: { githubLogin: 1, refreshTokenExpiresAt: 1 } },
+    )
+    .toArray();
+
+  const repos = await reposCollection();
+  const staleCutoff = new Date(Date.now() - REPO_STALE_MS);
+  const staleDocs = await repos
+    .find(
+      {
+        enabled: true,
+        removedFromInstallation: { $ne: true },
+        lastEventAt: { $lt: staleCutoff },
+      },
+      { projection: { fullName: 1 } },
+    )
+    .toArray();
+
   const failedLast24h = await requests.countDocuments({
     status: "failed",
     finishedAt: { $gte: dayStart },
   });
+
+  const settings = await settingsCollection();
+  const settingsDoc = await settings.findOne(
+    { _id: "global" },
+    { projection: { dailyCostAlertUsd: 1 } },
+  );
+  const thresholdUsd = settingsDoc?.dailyCostAlertUsd ?? null;
+  let budgetAlert: DashboardStats["budgetAlert"] = null;
+  if (thresholdUsd !== null && thresholdUsd > 0) {
+    const todayCostAgg = await aiCalls
+      .aggregate<{ total: number }>([
+        { $match: { createdAt: { $gte: todayStart } } },
+        { $group: { _id: null, total: { $sum: "$costUsd" } } },
+        { $project: { _id: 0, total: 1 } },
+      ])
+      .toArray();
+    budgetAlert = {
+      thresholdUsd,
+      todayUsd: todayCostAgg[0]?.total ?? 0,
+    };
+  }
 
   return {
     reviewsToday,
@@ -123,7 +177,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     verdictDistribution,
     attention: {
       reconnectAccounts: reconnectDocs.map((d) => d.githubLogin),
+      refreshExpiringAccounts: expiringDocs.map((d) => ({
+        githubLogin: d.githubLogin,
+        expiresAt: d.refreshTokenExpiresAt.toISOString(),
+      })),
+      staleRepos: staleDocs.map((d) => d.fullName),
       failedLast24h,
     },
+    budgetAlert,
   };
 }

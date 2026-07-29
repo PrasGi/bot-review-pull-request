@@ -4,6 +4,7 @@ import {
   reposCollection,
   installationsCollection,
 } from "@/lib/db/collections";
+import { defaultRepoConfig } from "@/lib/github/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export const GET = withGuard(async () => {
     accountLogin: accountByInst.get(r.installationId) ?? "unknown",
     enabled: r.enabled,
     removedFromInstallation: r.removedFromInstallation ?? false,
-    config: r.config,
+    config: { ...defaultRepoConfig(), ...r.config },
     lastEventAt: r.lastEventAt?.toISOString(),
   }));
 

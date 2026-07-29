@@ -2,6 +2,7 @@ import { ObjectId } from "mongodb";
 import {
   reviewRequestsCollection,
   reviewsCollection,
+  reposCollection,
 } from "@/lib/db/collections";
 import type {
   InstallationDoc,
@@ -33,6 +34,11 @@ async function resolveKind(
   return prior ? "re_review" : "initial";
 }
 
+async function touchRepoLastEvent(repoId: ObjectId, at: Date): Promise<void> {
+  const repos = await reposCollection();
+  await repos.updateOne({ _id: repoId }, { $set: { lastEventAt: at } });
+}
+
 export type EnqueueResult =
   | { status: "queued"; requestId: ObjectId }
   | { status: "superseded" }
@@ -51,6 +57,7 @@ export async function enqueueReviewRequest(params: {
     params;
   const requests = await reviewRequestsCollection();
   const now = new Date();
+  await touchRepoLastEvent(repo._id, now);
 
   const base = {
     deliveryId,
