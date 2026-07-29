@@ -1,5 +1,6 @@
 import {
   installationsCollection,
+  pendingInstallationsCollection,
   userConnectionsCollection,
   reposCollection,
   reviewRequestsCollection,
@@ -15,6 +16,11 @@ export async function ensureIndexes(): Promise<void> {
   await installations.createIndexes([
     { key: { installationId: 1 }, unique: true, name: "installationId_unique" },
     { key: { accountId: 1 }, name: "accountId" },
+  ]);
+
+  const pendingInstallations = await pendingInstallationsCollection();
+  await pendingInstallations.createIndexes([
+    { key: { requesterId: 1 }, name: "requesterId" },
   ]);
 
   const userConnections = await userConnectionsCollection();

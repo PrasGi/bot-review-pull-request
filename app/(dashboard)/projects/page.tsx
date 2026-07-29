@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR from 'swr';
-import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2, Search } from 'lucide-react';
+import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2, Search, Clock } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -33,8 +33,16 @@ type Account = {
   repoCount: number;
 };
 
+type PendingInstallation = {
+  accountLogin: string;
+  accountType: 'User' | 'Organization';
+  requesterLogin: string;
+  requestedAt: string;
+};
+
 type AccountsResponse = {
   accounts: Account[];
+  pendingInstallations: PendingInstallation[];
   connectUrl: string;
 };
 
@@ -156,6 +164,26 @@ function AccountsSection(): React.ReactElement {
     '/api/dashboard/accounts',
     fetcher
   );
+  const searchParams = useSearchParams();
+  const connectStatus = searchParams.get('connect');
+  const notifiedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (notifiedRef.current) return;
+    if (connectStatus === 'pending') {
+      notifiedRef.current = true;
+      toast.info(
+        'Installation pending approval',
+        'An organization owner must approve the GitHub App before its repositories appear here.'
+      );
+    } else if (connectStatus === 'success') {
+      notifiedRef.current = true;
+      toast.success('GitHub account connected');
+    } else if (connectStatus === 'error') {
+      notifiedRef.current = true;
+      toast.error('Could not connect GitHub account', 'Please try again.');
+    }
+  }, [connectStatus]);
 
   return (
     <section aria-labelledby="accounts-heading">
@@ -211,6 +239,43 @@ function AccountsSection(): React.ReactElement {
           {data.accounts.map((account) => (
             <AccountCard key={account.id} account={account} />
           ))}
+        </div>
+      )}
+
+      {data && data.pendingInstallations.length > 0 && (
+        <div className="mt-4 flex flex-col gap-3">
+          <h3 className="text-sm font-medium text-[var(--text-muted)]">
+            Pending owner approval
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {data.pendingInstallations.map((p) => (
+              <div
+                key={p.accountLogin}
+                className="flex items-start gap-3 rounded-xl border border-[oklch(0.80_0.12_85/0.3)] bg-[oklch(0.80_0.12_85/0.08)] p-4"
+              >
+                <Clock
+                  className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(0.55_0.14_85)]"
+                  aria-hidden="true"
+                />
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-[var(--text)] truncate">
+                      {p.accountLogin}
+                    </span>
+                    <Badge variant="warning">Awaiting approval</Badge>
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Requested by @{p.requesterLogin} ·{' '}
+                    {new Date(p.requestedAt).toLocaleDateString()}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    An owner of {p.accountLogin} must approve the GitHub App
+                    installation. It appears here automatically once approved.
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>

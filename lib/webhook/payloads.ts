@@ -54,6 +54,19 @@ export interface InstallationRepositoriesEvent {
   sender?: WebhookUser;
 }
 
+export interface WebhookAccount {
+  id: number;
+  login: string;
+  type?: "User" | "Organization";
+}
+
+export interface InstallationRequestEvent {
+  action: string;
+  requester?: WebhookUser | null;
+  account?: WebhookAccount | null;
+  sender?: WebhookUser;
+}
+
 export interface GenericWebhookPayload {
   action?: string;
   installation?: WebhookInstallation;

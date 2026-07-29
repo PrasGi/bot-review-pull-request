@@ -1,6 +1,7 @@
 import type { ObjectId } from "mongodb";
 import {
   installationsCollection,
+  pendingInstallationsCollection,
   userConnectionsCollection,
   reposCollection,
 } from "@/lib/db/collections";
@@ -8,8 +9,15 @@ import { defaultRepoConfig } from "@/lib/github/sync";
 import type {
   InstallationEvent,
   InstallationRepositoriesEvent,
+  InstallationRequestEvent,
   WebhookInstallation,
 } from "@/lib/webhook/payloads";
+
+async function clearPendingForAccount(accountLogin: string): Promise<void> {
+  if (!accountLogin) return;
+  const pending = await pendingInstallationsCollection();
+  await pending.deleteOne({ _id: accountLogin });
+}
 
 async function upsertInstallationFromWebhook(
   installation: WebhookInstallation,
@@ -118,6 +126,39 @@ export async function handleInstallationEvent(
     await addRepos(ref, installationId, payload.repositories);
   }
   await linkSenderToInstallation(payload.sender?.id, installationId);
+  await clearPendingForAccount(payload.installation.account?.login ?? "");
+}
+
+export async function handleInstallationRequestEvent(
+  payload: InstallationRequestEvent,
+): Promise<void> {
+  const accountLogin = payload.account?.login ?? "";
+  if (!accountLogin) return;
+
+  if (payload.action === "created") {
+    const pending = await pendingInstallationsCollection();
+    const now = new Date();
+    await pending.updateOne(
+      { _id: accountLogin },
+      {
+        $set: {
+          accountLogin,
+          accountType: payload.account?.type ?? "Organization",
+          accountId: payload.account?.id ?? 0,
+          requesterLogin: payload.requester?.login ?? payload.sender?.login ?? "",
+          requesterId: payload.requester?.id ?? payload.sender?.id ?? 0,
+          updatedAt: now,
+        },
+        $setOnInsert: { createdAt: now },
+      },
+      { upsert: true },
+    );
+    return;
+  }
+
+  if (payload.action === "cancelled" || payload.action === "denied") {
+    await clearPendingForAccount(accountLogin);
+  }
 }
 
 export async function handleInstallationRepositoriesEvent(

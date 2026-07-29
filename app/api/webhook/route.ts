@@ -5,6 +5,7 @@ import { allowRequest, penalizeSignatureFailure } from "@/lib/webhook/ratelimit"
 import {
   handleInstallationEvent,
   handleInstallationRepositoriesEvent,
+  handleInstallationRequestEvent,
 } from "@/lib/webhook/sync-events";
 import { evaluatePullRequestEvent } from "@/lib/webhook/trigger-matrix";
 import { reapStuckRequests } from "@/lib/review/reaper";
@@ -12,6 +13,7 @@ import { runReviewRequest } from "@/lib/review/runner";
 import type {
   InstallationEvent,
   InstallationRepositoriesEvent,
+  InstallationRequestEvent,
   PullRequestEvent,
 } from "@/lib/webhook/payloads";
 
@@ -66,6 +68,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     await handleInstallationRepositoriesEvent(
       payload as InstallationRepositoriesEvent,
     );
+    return NextResponse.json({ status: "synced" });
+  }
+  if (event === "installation_request") {
+    await handleInstallationRequestEvent(payload as InstallationRequestEvent);
     return NextResponse.json({ status: "synced" });
   }
 

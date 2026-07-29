@@ -2,6 +2,7 @@ import type { Collection } from "mongodb";
 import { getDb } from "@/lib/db/client";
 import type {
   InstallationDoc,
+  PendingInstallationDoc,
   UserConnectionDoc,
   RepoDoc,
   ReviewRequestDoc,
@@ -15,6 +16,7 @@ import type {
 
 export const COLLECTIONS = {
   installations: "installations",
+  pendingInstallations: "pending_installations",
   userConnections: "user_connections",
   repos: "repos",
   reviewRequests: "review_requests",
@@ -30,6 +32,14 @@ export async function installationsCollection(): Promise<
   Collection<InstallationDoc>
 > {
   return (await getDb()).collection<InstallationDoc>(COLLECTIONS.installations);
+}
+
+export async function pendingInstallationsCollection(): Promise<
+  Collection<PendingInstallationDoc>
+> {
+  return (await getDb()).collection<PendingInstallationDoc>(
+    COLLECTIONS.pendingInstallations,
+  );
 }
 
 export async function userConnectionsCollection(): Promise<

@@ -44,6 +44,17 @@ export interface InstallationDoc {
   updatedAt: Date;
 }
 
+export interface PendingInstallationDoc {
+  _id: string;
+  accountLogin: string;
+  accountType: "User" | "Organization";
+  accountId: number;
+  requesterLogin: string;
+  requesterId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface UserConnectionDoc {
   _id: ObjectId;
   githubUserId: number;

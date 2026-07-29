@@ -4,6 +4,7 @@ import {
   userConnectionsCollection,
   installationsCollection,
   reposCollection,
+  pendingInstallationsCollection,
 } from "@/lib/db/collections";
 import { getEnv } from "@/lib/env";
 
@@ -43,8 +44,18 @@ export const GET = withGuard(async () => {
     }),
   );
 
+  const pending = await pendingInstallationsCollection();
+  const pendingDocs = await pending.find({}).sort({ createdAt: -1 }).toArray();
+  const pendingInstallations = pendingDocs.map((p) => ({
+    accountLogin: p.accountLogin,
+    accountType: p.accountType,
+    requesterLogin: p.requesterLogin,
+    requestedAt: p.createdAt.toISOString(),
+  }));
+
   return NextResponse.json({
     accounts: items,
+    pendingInstallations,
     connectUrl: `${getEnv().APP_URL}/api/github/connect`,
   });
 });

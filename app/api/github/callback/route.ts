@@ -5,6 +5,7 @@ import { safeEqual } from "@/lib/crypto";
 import { exchangeCodeForTokens } from "@/lib/github/oauth";
 import { connectUser } from "@/lib/github/sync";
 import { OAUTH_STATE_COOKIE } from "@/app/api/github/connect/route";
+import { SESSION_COOKIE } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,24 +18,31 @@ function redirectToProjects(params: Record<string, string>): NextResponse {
   return NextResponse.redirect(url);
 }
 
+function redirectToConnected(status: string): NextResponse {
+  const url = new URL("/connected", getEnv().APP_URL);
+  url.searchParams.set("status", status);
+  return NextResponse.redirect(url);
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const params = request.nextUrl.searchParams;
   const code = params.get("code");
   const state = params.get("state");
-  const setupAction = params.get("setup_action");
 
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;
   cookieStore.delete(OAUTH_STATE_COOKIE);
+  const hasSession = Boolean(cookieStore.get(SESSION_COOKIE)?.value);
 
-  if (!state || !expectedState) {
-    return redirectToProjects({ connect: "error", reason: "missing_state" });
+  // A callback without our CSRF cookie is not a user-initiated OAuth leg (e.g.
+  // an org owner approving an install lands here without ever clicking Connect).
+  // Never exchange tokens without a validated state — just show the info page;
+  // the installation webhook is the source of truth for the actual data sync.
+  if (!expectedState) {
+    return redirectToConnected("received");
   }
-  if (!safeEqual(state, expectedState)) {
+  if (!state || !safeEqual(state, expectedState)) {
     return redirectToProjects({ connect: "error", reason: "state_mismatch" });
-  }
-  if (setupAction === "request") {
-    return redirectToProjects({ connect: "pending", reason: "org_approval" });
   }
   if (!code) {
     return redirectToProjects({ connect: "error", reason: "missing_code" });
@@ -43,6 +51,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const tokens = await exchangeCodeForTokens(code);
     const { githubLogin, repoCount } = await connectUser(tokens);
+    if (!hasSession) {
+      return redirectToConnected("received");
+    }
     return redirectToProjects({
       connect: "success",
       login: githubLogin,
