@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx --tsconfig tsconfig.json scripts/seed.ts",
-    "connect": "tsx --tsconfig tsconfig.json scripts/connect.ts"
+    "connect": "tsx --tsconfig tsconfig.json scripts/connect.ts",
+    "set-profile": "tsx --tsconfig tsconfig.json scripts/set-profile.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

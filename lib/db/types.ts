@@ -185,7 +185,8 @@ export type VerdictForcedReason =
 export type ReviewDocKind =
   | "initial"
   | "re_review"
-  | "re_review_fallback_full";
+  | "re_review_fallback_full"
+  | "re_review_reply";
 
 export interface ReviewDoc {
   _id: ObjectId;
@@ -198,8 +199,11 @@ export interface ReviewDoc {
   summary: string;
   intentMatch: IntentMatch;
   findings: Finding[];
+  findingCommentIds?: number[];
   reviewKind?: ReviewDocKind;
   noop?: boolean;
+  previousFindingStatuses?: PreviousFindingStatus[];
+  lastEvaluatedReplyAt?: Date;
   lastReviewedSha: string;
   previousReviewId?: ObjectId;
   githubReviewId?: number;

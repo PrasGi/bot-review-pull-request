@@ -20,7 +20,7 @@ export function defaultRepoConfig(): RepoConfig {
   return {
     provider: null,
     model: null,
-    reviewProfile: "normal",
+    reviewProfile: "chill",
     autoVerdict: true,
     confidenceThreshold: 0.6,
     customGuidelines: "",

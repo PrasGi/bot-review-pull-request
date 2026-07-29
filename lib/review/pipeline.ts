@@ -8,6 +8,8 @@ import {
 import type {
   Finding,
   IntentMatch,
+  PreviousFindingStatus,
+  RepoConfig,
   ReviewDoc,
   ReviewDocKind,
   ReviewRequestDoc,
@@ -20,6 +22,17 @@ import {
   submitReview,
   type InlineComment,
 } from "@/lib/github/pr";
+import {
+  fetchReviewInlineComments,
+  fetchAllPrComments,
+  postReviewCommentReply,
+} from "@/lib/github/replies";
+import {
+  mapFindingsToReplies,
+  evaluateReplies,
+  computeReplyVerdict,
+} from "@/lib/review/replies";
+import type { AIProvider } from "@/lib/ai/provider";
 import { fetchCompare } from "@/lib/github/compare";
 import type { PrFile } from "@/lib/review/diff-format";
 import { formatFilesForPrompt } from "@/lib/review/diff-format";
@@ -136,6 +149,135 @@ async function resolveReviewScope(params: {
   };
 }
 
+type ReplyReviewOutcome =
+  | { kind: "noop" }
+  | {
+      kind: "reviewed";
+      verdict: Verdict;
+      verdictForced?: import("@/lib/db/types").VerdictForcedReason;
+      summary: string;
+      statuses: PreviousFindingStatus[];
+      githubReviewId: number;
+      lastEvaluatedReplyAt: Date;
+    };
+
+async function runReplyReview(params: {
+  prev: ReviewDoc;
+  token: string;
+  owner: string;
+  repoName: string;
+  prNumber: number;
+  headSha: string;
+  botLogin: string;
+  prTitle: string;
+  config: RepoConfig;
+  provider: AIProvider;
+  model: string;
+  providerName: import("@/lib/db/types").AIProviderName;
+  pricing: import("@/lib/db/types").ModelPricing | undefined;
+  requestId: ObjectId;
+  repoId: ObjectId;
+  userConnectionId: ObjectId;
+}): Promise<ReplyReviewOutcome> {
+  const { prev, token, owner, repoName, prNumber, botLogin } = params;
+
+  if (prev.githubReviewId === undefined || prev.findings.length === 0) {
+    return { kind: "noop" };
+  }
+
+  const [botComments, allComments] = await Promise.all([
+    fetchReviewInlineComments(token, owner, repoName, prNumber, prev.githubReviewId),
+    fetchAllPrComments(token, owner, repoName, prNumber),
+  ]);
+
+  const since = prev.lastEvaluatedReplyAt ?? prev.submittedAt;
+  const bundles = mapFindingsToReplies({
+    findings: prev.findings,
+    botComments,
+    allComments,
+    botLogin,
+    since,
+  });
+  if (bundles.length === 0) return { kind: "noop" };
+
+  const lastEvaluatedReplyAt = new Date(
+    Math.max(
+      ...bundles.flatMap((b) =>
+        b.replies.map((r) => new Date(r.created_at).getTime()),
+      ),
+    ),
+  );
+
+  const evaluation = await evaluateReplies({
+    bundles,
+    prTitle: params.prTitle,
+    prIntentExplanation: prev.intentMatch.explanation,
+    provider: params.provider,
+    model: params.model,
+  });
+
+  await recordAiCall({
+    requestId: params.requestId,
+    repoId: params.repoId,
+    userConnectionId: params.userConnectionId,
+    provider: params.providerName,
+    model: params.model,
+    purpose: "re-review",
+    templateVersion: TEMPLATE_VERSION,
+    prompt: evaluation.prompt,
+    response: evaluation.response,
+    usage: { promptTokens: 0, completionTokens: 0 },
+    costUsd: 0,
+    latencyMs: 0,
+    status: "ok",
+  });
+
+  const { verdict, forced, summary } = computeReplyVerdict({
+    findings: prev.findings,
+    statuses: evaluation.statuses,
+    config: params.config,
+  });
+
+  const resolvedIndexes = new Set(
+    evaluation.statuses.filter((s) => s.status === "resolved").map((s) => s.index),
+  );
+  for (const bundle of bundles) {
+    if (!resolvedIndexes.has(bundle.findingIndex)) continue;
+    try {
+      await postReviewCommentReply(
+        token,
+        owner,
+        repoName,
+        prNumber,
+        bundle.commentId,
+        "Acknowledged — considering this resolved based on your reply. ✅",
+      );
+    } catch {
+      // Non-fatal: the verdict review below is the authoritative signal.
+    }
+  }
+
+  const submit = await submitReview(token, {
+    owner,
+    repo: repoName,
+    prNumber,
+    commitId: params.headSha,
+    event: verdict,
+    body: summary,
+    comments: [],
+  });
+
+  return {
+    kind: "reviewed",
+    verdict,
+    ...(forced ? { verdictForced: forced } : {}),
+    summary,
+    statuses: evaluation.statuses,
+    githubReviewId: submit.githubReviewId,
+    lastEvaluatedReplyAt,
+  };
+}
+
 function parseChunkOutput(raw: string): {
   findings: FindingOutput[];
   summary?: string;
@@ -200,6 +342,46 @@ export async function runReviewPipeline(
 
   if (kept.length === 0) {
     if (delta.kind === "re_review") {
+      if (delta.previousReview) {
+        const replyOutcome = await runReplyReview({
+          prev: delta.previousReview,
+          token,
+          owner,
+          repoName,
+          prNumber: request.prNumber,
+          headSha: pr.headSha,
+          botLogin: reviewer.githubLogin,
+          prTitle: pr.title,
+          config: repo.config,
+          provider: instance,
+          model,
+          providerName: provider,
+          pricing,
+          requestId: request._id,
+          repoId: repo._id,
+          userConnectionId: reviewer._id,
+        });
+        await heartbeat();
+        if (replyOutcome.kind === "reviewed") {
+          return persistReview({
+            request,
+            repoId: repo._id,
+            verdict: replyOutcome.verdict,
+            ...(replyOutcome.verdictForced
+              ? { verdictForced: replyOutcome.verdictForced }
+              : {}),
+            summary: replyOutcome.summary,
+            intentMatch: delta.previousReview.intentMatch,
+            findings: [],
+            headSha: pr.headSha,
+            githubReviewId: replyOutcome.githubReviewId,
+            reviewKind: "re_review_reply",
+            previousReviewId: delta.previousReview._id,
+            previousFindingStatuses: replyOutcome.statuses,
+            lastEvaluatedReplyAt: replyOutcome.lastEvaluatedReplyAt,
+          });
+        }
+      }
       return persistReview({
         request,
         repoId: repo._id,
@@ -461,6 +643,8 @@ async function persistReview(params: {
   reviewKind?: ReviewDocKind;
   previousReviewId?: ObjectId;
   noop?: boolean;
+  previousFindingStatuses?: PreviousFindingStatus[];
+  lastEvaluatedReplyAt?: Date;
 }): Promise<PipelineResult> {
   const reviews = await reviewsCollection();
   const reviewId = new ObjectId();
@@ -480,6 +664,12 @@ async function persistReview(params: {
       ? { previousReviewId: params.previousReviewId }
       : {}),
     ...(params.noop ? { noop: true } : {}),
+    ...(params.previousFindingStatuses
+      ? { previousFindingStatuses: params.previousFindingStatuses }
+      : {}),
+    ...(params.lastEvaluatedReplyAt
+      ? { lastEvaluatedReplyAt: params.lastEvaluatedReplyAt }
+      : {}),
     lastReviewedSha: params.headSha,
     ...(params.githubReviewId !== undefined
       ? { githubReviewId: params.githubReviewId }

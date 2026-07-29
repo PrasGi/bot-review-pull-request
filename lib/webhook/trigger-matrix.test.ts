@@ -26,7 +26,7 @@ const repo = {
   config: {
     provider: null,
     model: null,
-    reviewProfile: "normal" as const,
+    reviewProfile: "chill" as const,
     autoVerdict: true,
     confidenceThreshold: 0.6,
     customGuidelines: "",

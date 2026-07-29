@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     adminPasswordHash,
     defaultProvider: "glm",
     defaultModel: "glm-4.6",
-    defaultReviewProfile: "normal",
+    defaultReviewProfile: existing?.defaultReviewProfile ?? "chill",
     providerKeys: existing?.providerKeys ?? providerKeys,
     modelPricing: existing?.modelPricing ?? DEFAULT_PRICING,
     promptTemplates: existing?.promptTemplates ?? getDefaultPromptTemplates(),
@@ -51,7 +51,7 @@ async function main(): Promise<void> {
   await settings.replaceOne({ _id: "global" }, doc, { upsert: true });
 
   process.stdout.write(
-    `Seed complete. Admin: ${adminEmail}. Default model: glm-4.7.\n`,
+    `Seed complete. Admin: ${adminEmail}. Default model: ${doc.defaultModel}.\n`,
   );
   process.exit(0);
 }
