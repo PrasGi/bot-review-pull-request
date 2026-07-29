@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/collections";
 import type { RepoConfig } from "@/lib/db/types";
 import { encrypt } from "@/lib/crypto";
+import { getValidAccessToken } from "@/lib/github/tokens";
 import type { GitHubTokenSet } from "@/lib/github/oauth";
 import {
   fetchAuthenticatedUser,
@@ -62,17 +63,17 @@ export async function upsertRepos(
   const now = new Date();
   for (const repo of repos) {
     await collection.updateOne(
-      { fullName: repo.full_name },
+      { installationId, fullName: repo.full_name },
       {
         $set: {
-          installationRef,
-          installationId,
-          fullName: repo.full_name,
           repoGithubId: repo.id,
           removedFromInstallation: false,
           updatedAt: now,
         },
         $setOnInsert: {
+          installationRef,
+          installationId,
+          fullName: repo.full_name,
           enabled: true,
           config: defaultRepoConfig(),
           createdAt: now,
@@ -83,24 +84,33 @@ export async function upsertRepos(
   }
 }
 
-export async function connectUser(tokens: GitHubTokenSet): Promise<{
-  githubLogin: string;
-  installationCount: number;
+async function syncInstallationsForToken(accessToken: string): Promise<{
+  installationIds: number[];
   repoCount: number;
 }> {
-  const user = await fetchAuthenticatedUser(tokens.accessToken);
-  const installations = await fetchUserInstallations(tokens.accessToken);
-
+  const installations = await fetchUserInstallations(accessToken);
   let repoCount = 0;
   for (const installation of installations) {
     const { selection, repos } = await fetchInstallationRepos(
-      tokens.accessToken,
+      accessToken,
       installation.id,
     );
     const ref = await upsertInstallation(installation, selection);
     await upsertRepos(ref, installation.id, repos);
     repoCount += repos.length;
   }
+  return { installationIds: installations.map((i) => i.id), repoCount };
+}
+
+export async function connectUser(tokens: GitHubTokenSet): Promise<{
+  githubLogin: string;
+  installationCount: number;
+  repoCount: number;
+}> {
+  const user = await fetchAuthenticatedUser(tokens.accessToken);
+  const { installationIds, repoCount } = await syncInstallationsForToken(
+    tokens.accessToken,
+  );
 
   const userConnections = await userConnectionsCollection();
   const now = new Date();
@@ -115,7 +125,7 @@ export async function connectUser(tokens: GitHubTokenSet): Promise<{
         tokenExpiresAt: tokens.accessTokenExpiresAt,
         refreshTokenEncrypted: encrypt(tokens.refreshToken),
         refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-        installationIds: installations.map((i) => i.id),
+        installationIds,
         reconnectRequired: false,
         updatedAt: now,
       },
@@ -126,7 +136,24 @@ export async function connectUser(tokens: GitHubTokenSet): Promise<{
 
   return {
     githubLogin: user.login,
-    installationCount: installations.length,
+    installationCount: installationIds.length,
     repoCount,
   };
+}
+
+export async function resyncConnection(connectionId: ObjectId): Promise<{
+  installationCount: number;
+  repoCount: number;
+}> {
+  const accessToken = await getValidAccessToken(connectionId);
+  const { installationIds, repoCount } =
+    await syncInstallationsForToken(accessToken);
+
+  const userConnections = await userConnectionsCollection();
+  await userConnections.updateOne(
+    { _id: connectionId },
+    { $set: { installationIds, updatedAt: new Date() } },
+  );
+
+  return { installationCount: installationIds.length, repoCount };
 }

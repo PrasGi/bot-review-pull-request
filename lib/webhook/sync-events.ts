@@ -54,17 +54,17 @@ async function addRepos(
   const now = new Date();
   for (const repo of repos) {
     await collection.updateOne(
-      { fullName: repo.full_name },
+      { installationId, fullName: repo.full_name },
       {
         $set: {
-          installationRef,
-          installationId,
-          fullName: repo.full_name,
           repoGithubId: repo.id,
           removedFromInstallation: false,
           updatedAt: now,
         },
         $setOnInsert: {
+          installationRef,
+          installationId,
+          fullName: repo.full_name,
           enabled: true,
           config: defaultRepoConfig(),
           createdAt: now,
@@ -76,13 +76,14 @@ async function addRepos(
 }
 
 async function markReposRemoved(
+  installationId: number,
   repos: { full_name: string }[],
 ): Promise<void> {
   const collection = await reposCollection();
   const now = new Date();
   for (const repo of repos) {
     await collection.updateOne(
-      { fullName: repo.full_name },
+      { installationId, fullName: repo.full_name },
       { $set: { removedFromInstallation: true, enabled: false, updatedAt: now } },
     );
   }
@@ -169,7 +170,7 @@ export async function handleInstallationRepositoriesEvent(
     await addRepos(ref, payload.installation.id, payload.repositories_added);
   }
   if (payload.repositories_removed?.length) {
-    await markReposRemoved(payload.repositories_removed);
+    await markReposRemoved(payload.installation.id, payload.repositories_removed);
   }
   await linkSenderToInstallation(payload.sender?.id, payload.installation.id);
 }

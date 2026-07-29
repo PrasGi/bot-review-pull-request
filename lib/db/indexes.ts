@@ -31,8 +31,17 @@ export async function ensureIndexes(): Promise<void> {
   ]);
 
   const repos = await reposCollection();
+  const repoIndexes = await repos.indexes();
+  if (repoIndexes.some((idx) => idx.name === "fullName_unique")) {
+    await repos.dropIndex("fullName_unique");
+  }
   await repos.createIndexes([
-    { key: { fullName: 1 }, unique: true, name: "fullName_unique" },
+    {
+      key: { installationId: 1, fullName: 1 },
+      unique: true,
+      name: "installation_fullName_unique",
+    },
+    { key: { fullName: 1 }, name: "fullName" },
     { key: { installationRef: 1 }, name: "installationRef" },
     { key: { installationId: 1 }, name: "installationId" },
   ]);

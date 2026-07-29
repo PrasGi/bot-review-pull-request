@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import useSWR from 'swr';
-import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2, Search, Clock } from 'lucide-react';
+import useSWR, { mutate as globalMutate } from 'swr';
+import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2, Search, Clock, RefreshCw } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -89,7 +89,32 @@ function AccountAvatar({ account }: { account: Account }): React.ReactElement {
   );
 }
 
-function AccountCard({ account }: { account: Account }): React.ReactElement {
+function AccountCard({
+  account,
+  onResynced,
+}: {
+  account: Account;
+  onResynced: () => Promise<void>;
+}): React.ReactElement {
+  const [syncing, setSyncing] = React.useState(false);
+
+  const handleResync = async (): Promise<void> => {
+    setSyncing(true);
+    try {
+      const res = await mutateJson<{ repoCount: number }>(
+        `/api/dashboard/accounts/${account.id}/resync`,
+        'POST'
+      );
+      toast.success('Re-sync complete', `${res.repoCount} repositories synced.`);
+      await onResynced();
+    } catch (e) {
+      const message = e instanceof FetchError ? e.message : 'Re-sync failed';
+      toast.error('Re-sync failed', message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <GlassCard hoverLift className="flex flex-col gap-4">
       <div className="flex items-start gap-3">
@@ -108,9 +133,22 @@ function AccountCard({ account }: { account: Account }): React.ReactElement {
           </div>
           <p className="text-sm text-[var(--text-muted)]">@{account.githubLogin}</p>
         </div>
-        <span className="text-xs text-[var(--text-muted)] shrink-0 tabular-nums">
-          {account.repoCount} {account.repoCount === 1 ? 'repo' : 'repos'}
-        </span>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className="text-xs text-[var(--text-muted)] tabular-nums">
+            {account.repoCount} {account.repoCount === 1 ? 'repo' : 'repos'}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleResync}
+            loading={syncing}
+            disabled={account.reconnectRequired}
+            aria-label={`Re-sync ${account.githubLogin}`}
+          >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            Re-sync
+          </Button>
+        </div>
       </div>
 
       {account.installations.length > 0 && (
@@ -160,10 +198,13 @@ function AccountsSkeleton(): React.ReactElement {
 }
 
 function AccountsSection(): React.ReactElement {
-  const { data, error, isLoading } = useSWR<AccountsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<AccountsResponse>(
     '/api/dashboard/accounts',
     fetcher
   );
+  const handleResynced = React.useCallback(async (): Promise<void> => {
+    await Promise.all([mutate(), globalMutate('/api/dashboard/repos')]);
+  }, [mutate]);
   const searchParams = useSearchParams();
   const connectStatus = searchParams.get('connect');
   const notifiedRef = React.useRef(false);
@@ -237,7 +278,11 @@ function AccountsSection(): React.ReactElement {
       {data && data.accounts.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2">
           {data.accounts.map((account) => (
-            <AccountCard key={account.id} account={account} />
+            <AccountCard
+              key={account.id}
+              account={account}
+              onResynced={handleResynced}
+            />
           ))}
         </div>
       )}
