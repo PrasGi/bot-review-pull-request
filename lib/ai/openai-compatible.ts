@@ -68,6 +68,11 @@ export function createOpenAICompatibleProvider(
         return await callOnce(params);
       } catch (error) {
         const msg = error instanceof Error ? error.message : "";
+        // finish_reason=length means the response was truncated at the output
+        // cap; retrying with the same budget fails identically, so double it.
+        if (msg.includes("finish_reason=length")) {
+          return callOnce({ ...params, maxTokens: params.maxTokens * 2 });
+        }
         if (msg.includes("empty completion")) {
           return callOnce(params);
         }
