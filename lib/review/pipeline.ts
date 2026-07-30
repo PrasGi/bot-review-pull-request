@@ -55,6 +55,7 @@ import {
   resolveVerdict,
 } from "@/lib/review/verdict";
 import { applyScopeGuard, collectRemovedLines } from "@/lib/review/scope-guard";
+import { PrClosedError } from "@/lib/review/errors";
 import { log } from "@/lib/logger";
 import { buildReviewBody } from "@/lib/review/summary";
 import { recordAiCall } from "@/lib/review/audit";
@@ -63,8 +64,8 @@ import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 // Latency contract: webhook -> submitted review in <=180s. GLM-4.7 latency is
 // dominated by INPUT size, so small chunks (fast per-call) run in parallel and
 // TOTAL input work is capped — huge PRs get an honest partial review.
-const CHUNK_TOKENS = 12_000;
-const TOTAL_INPUT_BUDGET_TOKENS = 72_000;
+const CHUNK_TOKENS = 4_000;
+const TOTAL_INPUT_BUDGET_TOKENS = 24_000;
 const MAX_PARALLEL_CHUNKS = 3;
 const CALL_TIMEOUT_MS = 60_000;
 const MAX_TOKENS_CHUNK = 4_608;
@@ -325,6 +326,9 @@ export async function runReviewPipeline(
   const { owner, repo: repoName } = splitRepo(repo.fullName);
 
   const pr = await fetchPullRequest(token, owner, repoName, request.prNumber);
+  if (pr.merged || pr.state === "closed") {
+    throw new PrClosedError(pr.merged ? "pr_merged" : "pr_closed");
+  }
   await heartbeat();
 
   const delta = await resolveReviewScope({

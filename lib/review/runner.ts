@@ -2,6 +2,7 @@ import type { ObjectId } from "mongodb";
 import { reviewRequestsCollection } from "@/lib/db/collections";
 import type { ReviewRequestDoc } from "@/lib/db/types";
 import { runReviewPipeline } from "@/lib/review/pipeline";
+import { PrClosedError } from "@/lib/review/errors";
 import { log, errorFields } from "@/lib/logger";
 
 async function claim(requestId: ObjectId): Promise<ReviewRequestDoc | null> {
@@ -40,6 +41,17 @@ async function markFailed(
   );
 }
 
+async function markCancelled(
+  requestId: ObjectId,
+  reason: string,
+): Promise<void> {
+  const requests = await reviewRequestsCollection();
+  await requests.updateOne(
+    { _id: requestId },
+    { $set: { status: "cancelled", cancelReason: reason, finishedAt: new Date() } },
+  );
+}
+
 export async function runReviewRequest(requestId: ObjectId): Promise<void> {
   const request = await claim(requestId);
   if (!request) return;
@@ -69,6 +81,15 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
+    if (error instanceof PrClosedError) {
+      await markCancelled(requestId, error.reason);
+      log.info("review.pipeline.cancelled", {
+        requestId: requestIdHex,
+        durationMs: Date.now() - startedAt,
+        reason: error.reason,
+      });
+      return;
+    }
     const message = error instanceof Error ? error.message : "unknown";
     await markFailed(requestId, "pipeline", message);
     log.error("review.pipeline.failed", {

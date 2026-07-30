@@ -7,6 +7,8 @@ export interface PullRequestData {
   title: string;
   body: string | null;
   draft: boolean;
+  state: "open" | "closed";
+  merged: boolean;
   headSha: string;
   baseSha: string;
   authorLogin: string;
@@ -19,6 +21,8 @@ interface PrApiResponse {
   title: string;
   body: string | null;
   draft: boolean;
+  state: "open" | "closed";
+  merged?: boolean;
   head: { sha: string };
   base: { sha: string };
   user: { login: string };
@@ -57,6 +61,8 @@ export async function fetchPullRequest(
     title: pr.title,
     body: pr.body,
     draft: pr.draft,
+    state: pr.state,
+    merged: pr.merged ?? false,
     headSha: pr.head.sha,
     baseSha: pr.base.sha,
     authorLogin: pr.user.login,
