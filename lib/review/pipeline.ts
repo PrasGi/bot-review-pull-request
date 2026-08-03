@@ -61,12 +61,13 @@ import { buildReviewBody } from "@/lib/review/summary";
 import { recordAiCall } from "@/lib/review/audit";
 import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 
-// Latency contract: webhook -> submitted review in <=180s. GLM-4.7 latency is
-// dominated by INPUT size, so small chunks (fast per-call) run in parallel and
-// TOTAL input work is capped — huge PRs get an honest partial review.
-const CHUNK_TOKENS = 4_000;
-const TOTAL_INPUT_BUDGET_TOKENS = 24_000;
-const MAX_PARALLEL_CHUNKS = 3;
+// Budget: 75k input tokens per PR (15k x 5 parallel chunks) so almost every PR
+// gets FULL coverage. GLM latency is dominated by input size, so the 120s
+// per-call timeout + one retry stays within Vercel's 300s. PRs beyond 75k
+// tokens still get an honest partial review with disclosure.
+const CHUNK_TOKENS = 15_000;
+const TOTAL_INPUT_BUDGET_TOKENS = 75_000;
+const MAX_PARALLEL_CHUNKS = 5;
 const CALL_TIMEOUT_MS = 120_000;
 const MAX_TOKENS_CHUNK = 4_608;
 
