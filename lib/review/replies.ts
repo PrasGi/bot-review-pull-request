@@ -14,6 +14,7 @@ import {
 } from "@/lib/review/prompt";
 
 const REPLY_EVAL_MAX_TOKENS = 1200;
+const REPLY_EVAL_TIMEOUT_MS = 90_000;
 
 export interface ReplyBundle {
   findingIndex: number;
@@ -123,6 +124,7 @@ export async function evaluateReplies(params: {
     model,
     messages,
     maxTokens: REPLY_EVAL_MAX_TOKENS,
+    timeoutMs: REPLY_EVAL_TIMEOUT_MS,
   });
 
   const statuses = parseReplyEval(completion.text, bundles);

@@ -67,7 +67,7 @@ import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 const CHUNK_TOKENS = 4_000;
 const TOTAL_INPUT_BUDGET_TOKENS = 24_000;
 const MAX_PARALLEL_CHUNKS = 3;
-const CALL_TIMEOUT_MS = 60_000;
+const CALL_TIMEOUT_MS = 120_000;
 const MAX_TOKENS_CHUNK = 4_608;
 
 function splitRepo(fullName: string): { owner: string; repo: string } {

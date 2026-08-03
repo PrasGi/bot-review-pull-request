@@ -76,6 +76,11 @@ export function createOpenAICompatibleProvider(
         if (msg.includes("empty completion")) {
           return callOnce(params);
         }
+        // GLM latency is high and bursty; a timed-out call often succeeds on a
+        // second attempt. One retry only — the SDK's own retries are disabled.
+        if (msg.includes("Request timed out")) {
+          return callOnce(params);
+        }
         throw error;
       }
     },
