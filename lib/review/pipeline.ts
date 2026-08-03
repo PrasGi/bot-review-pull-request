@@ -61,12 +61,13 @@ import { buildReviewBody } from "@/lib/review/summary";
 import { recordAiCall } from "@/lib/review/audit";
 import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 
-// Budget: 75k input tokens per PR (15k x 5 parallel chunks) so almost every PR
-// gets FULL coverage. GLM latency is dominated by input size, so the 120s
-// per-call timeout + one retry stays within Vercel's 300s. PRs beyond 75k
-// tokens still get an honest partial review with disclosure.
-const CHUNK_TOKENS = 15_000;
-const TOTAL_INPUT_BUDGET_TOKENS = 75_000;
+// Budget: 100k input tokens per PR (20k x 5 parallel chunks) so almost every
+// PR gets FULL coverage; small PRs only spend what their diff needs. GLM
+// latency is dominated by input size, so the 120s per-call timeout + one retry
+// stays within Vercel Hobby's 300s hard cap. PRs beyond 100k tokens still get
+// an honest partial review with disclosure.
+const CHUNK_TOKENS = 20_000;
+const TOTAL_INPUT_BUDGET_TOKENS = 100_000;
 const MAX_PARALLEL_CHUNKS = 5;
 const CALL_TIMEOUT_MS = 120_000;
 const MAX_TOKENS_CHUNK = 4_608;
