@@ -116,6 +116,66 @@ describe("applyScopeGuard — other out-of-context rules", () => {
   });
 });
 
+describe("applyScopeGuard — named vulnerabilities survive the heuristics", () => {
+  it("keeps an open-redirect finding that the missing-validation rule would drop on chill", () => {
+    const result = applyScopeGuard(
+      [
+        finding({
+          comment:
+            "The redirect target is taken from the query string without validation — this is an open redirect.",
+        }),
+      ],
+      BASE,
+    );
+    expect(result.kept).toHaveLength(1);
+    expect(result.kept[0]?.blocking).toBe(true);
+    expect(result.droppedCount).toBe(0);
+  });
+
+  it("keeps a path-traversal finding that mentions other routes", () => {
+    const result = applyScopeGuard(
+      [
+        finding({
+          comment:
+            "Other routes sanitize this, but here the filename reaches fs.readFile allowing path traversal.",
+        }),
+      ],
+      BASE,
+    );
+    expect(result.kept).toHaveLength(1);
+  });
+
+  it("keeps an unverified-JWT-signature finding without hedging it", () => {
+    const result = applyScopeGuard(
+      [finding({ comment: "This decodes the JWT but never performs signature verification." })],
+      BASE,
+    );
+    expect(result.kept[0]?.comment).not.toMatch(/^Please double-check/);
+    expect(result.kept[0]?.blocking).toBe(true);
+  });
+
+  it("reports how many findings bypassed the guard on security grounds", () => {
+    const result = applyScopeGuard(
+      [
+        finding({ comment: "User input is concatenated into a SQL injection sink." }),
+        finding({ comment: "There are no tests for this new service." }),
+      ],
+      BASE,
+    );
+    expect(result.securityKeptCount).toBe(1);
+    expect(result.droppedCount).toBe(1);
+  });
+
+  it("does not treat an ordinary missing-guard finding as a named vulnerability", () => {
+    const result = applyScopeGuard(
+      [finding({ comment: "This endpoint is missing an authorization guard." })],
+      BASE,
+    );
+    expect(result.securityKeptCount).toBe(0);
+    expect(result.kept).toHaveLength(0);
+  });
+});
+
 describe("collectRemovedLines", () => {
   it("collects only removed lines, ignoring file headers", () => {
     const patch = [

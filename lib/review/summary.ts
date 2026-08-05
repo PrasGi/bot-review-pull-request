@@ -6,6 +6,50 @@ const VERDICT_BANNER: Record<Verdict, string> = {
   COMMENT: "Comment 💬",
 };
 
+const GENERIC_FALLBACK: Record<Verdict, string> = {
+  APPROVE: "All good — no blocking issues found.",
+  REQUEST_CHANGES: "See comments.",
+  COMMENT: "See comments.",
+};
+
+export interface SummaryComposition {
+  verdict: Verdict;
+  summary?: string | undefined;
+  verdictReason?: string | undefined;
+  chunkSummaries?: string[] | undefined;
+}
+
+function normalize(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function restates(overview: string, reason: string): boolean {
+  const a = normalize(overview);
+  const b = normalize(reason);
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
+}
+
+export function composeSummary(input: SummaryComposition): string {
+  const chunkSummaries = (input.chunkSummaries ?? [])
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const overview =
+    input.summary?.trim() ||
+    (chunkSummaries.length === 1
+      ? (chunkSummaries[0] ?? "")
+      : chunkSummaries.map((s) => `- ${s}`).join("\n"));
+
+  const reason = input.verdictReason?.trim() ?? "";
+
+  const parts: string[] = [];
+  if (overview) parts.push(overview);
+  if (reason && !restates(overview, reason)) parts.push(reason);
+
+  return parts.length > 0 ? parts.join("\n\n") : GENERIC_FALLBACK[input.verdict];
+}
+
 export interface PartialReviewInfo {
   totalFiles: number;
   reviewedCount: number;

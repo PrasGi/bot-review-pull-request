@@ -25,6 +25,13 @@ const SPECULATION_RX =
 const PERF_SPECULATION_RX =
   /\b(n\s*\+\s*1|should (be )?cached?|memory leak|bundle size)\b/i;
 
+// Named vulnerability classes are provable from the diff alone and are exactly
+// what a reviewer must not stay quiet about. Without this bypass the generic
+// heuristics below delete them: "missing validation of the redirect URL" trips
+// MISSING_RX + VALIDATION_RX and is silently dropped on lenient profiles.
+const SECURITY_PRIMITIVE_RX =
+  /\b(open.?redirect|path.?traversal|directory.?traversal|sql.?injection|command.?injection|code.?injection|template.?injection|header.?injection|log.?injection|crlf|ssrf|xxe|prototype.?pollution|deserializ\w*|null.?byte|double.?encod\w*|percent.?encod\w*|url.?normali[sz]\w*|backslash|jwt|signature\s+(verif\w*|valid\w*|check)|algorithm\s+confusion|timing.?attack|constant.?time|hard.?coded\s+(secret|password|token|key|credential)\w*)\b/i;
+
 function hedge(comment: string): string {
   return /^please double.?check/i.test(comment)
     ? comment
@@ -35,6 +42,7 @@ export interface ScopeGuardResult {
   kept: FindingOutput[];
   droppedCount: number;
   downgradedCount: number;
+  securityKeptCount: number;
 }
 
 export function applyScopeGuard(
@@ -49,6 +57,7 @@ export function applyScopeGuard(
   const kept: FindingOutput[] = [];
   let droppedCount = 0;
   let downgradedCount = 0;
+  let securityKeptCount = 0;
 
   const drop = (): void => {
     droppedCount += 1;
@@ -60,6 +69,12 @@ export function applyScopeGuard(
 
   for (const f of findings) {
     const text = `${f.comment} ${f.suggestion ?? ""}`;
+
+    if (SECURITY_PRIMITIVE_RX.test(text)) {
+      securityKeptCount += 1;
+      kept.push(f);
+      continue;
+    }
 
     if (UNDEFINED_SYMBOL_RX.test(text) || CONSISTENCY_RX.test(text)) {
       drop();
@@ -99,7 +114,7 @@ export function applyScopeGuard(
     kept.push(f);
   }
 
-  return { kept, droppedCount, downgradedCount };
+  return { kept, droppedCount, downgradedCount, securityKeptCount };
 }
 
 export function collectRemovedLines(patches: (string | undefined)[]): string {
