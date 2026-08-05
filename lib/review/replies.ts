@@ -125,6 +125,7 @@ export async function evaluateReplies(params: {
     messages,
     maxTokens: REPLY_EVAL_MAX_TOKENS,
     timeoutMs: REPLY_EVAL_TIMEOUT_MS,
+    thinking: "disabled",
   });
 
   const statuses = parseReplyEval(completion.text, bundles);

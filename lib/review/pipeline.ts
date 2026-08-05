@@ -48,29 +48,45 @@ import {
   type PreviousFindingLine,
 } from "@/lib/review/prompt";
 import { chunkReviewSchema } from "@/lib/review/schemas";
-import type { FindingOutput, IntentMatchOutput } from "@/lib/review/schemas";
+import type {
+  ChunkReviewOutput,
+  FindingOutput,
+  IntentMatchOutput,
+} from "@/lib/review/schemas";
 import {
   enforceKnobs,
   filterFindingsToValidLines,
   resolveVerdict,
 } from "@/lib/review/verdict";
 import { applyScopeGuard, collectRemovedLines } from "@/lib/review/scope-guard";
+import { mapWithConcurrency } from "@/lib/review/concurrency";
 import { PrClosedError } from "@/lib/review/errors";
 import { log } from "@/lib/logger";
-import { buildReviewBody } from "@/lib/review/summary";
+import { buildReviewBody, composeSummary } from "@/lib/review/summary";
 import { recordAiCall } from "@/lib/review/audit";
 import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 
-// Budget: 100k input tokens per PR (20k x 5 parallel chunks) so almost every
-// PR gets FULL coverage; small PRs only spend what their diff needs. GLM
-// latency is dominated by input size, so the 120s per-call timeout + one retry
-// stays within Vercel Hobby's 300s hard cap. PRs beyond 100k tokens still get
-// an honest partial review with disclosure.
-const CHUNK_TOKENS = 20_000;
-const TOTAL_INPUT_BUDGET_TOKENS = 100_000;
-const MAX_PARALLEL_CHUNKS = 5;
-const CALL_TIMEOUT_MS = 120_000;
-const MAX_TOKENS_CHUNK = 4_608;
+// Budget: 96k input tokens per PR (12k x 8 chunks) so almost every PR gets FULL
+// coverage; small PRs only spend what their diff needs. Smaller chunks are what
+// bounds per-call latency — a reasoning model on a 20k chunk was measured at
+// 80s+ and exhausted its whole output cap on hidden reasoning, returning nothing.
+// 16k output leaves room for reasoning AND the JSON; 4.6k truncated either way.
+// Chunks run CONCURRENCY_LIMIT at a time, so wall time is roughly
+// ceil(chunks / CONCURRENCY_LIMIT) waves, kept under Vercel's 300s hard cap by
+// the deadlines below. PRs beyond the budget get an honest partial review.
+const CHUNK_TOKENS = 12_000;
+const TOTAL_INPUT_BUDGET_TOKENS = 96_000;
+const MAX_CHUNKS = 8;
+const CONCURRENCY_LIMIT = 4;
+const CALL_TIMEOUT_MS = 140_000;
+const MAX_TOKENS_CHUNK = 16_384;
+
+// Measured from pipeline start. RETRY stops new attempts early enough that a
+// retry can still finish and be aggregated; GLOBAL reserves the remainder for
+// submitting the review. Posting a partial review always beats a 300s timeout
+// that posts nothing.
+const RETRY_DEADLINE_MS = 200_000;
+const GLOBAL_DEADLINE_MS = 240_000;
 
 function splitRepo(fullName: string): { owner: string; repo: string } {
   const [owner, repo] = fullName.split("/");
@@ -283,22 +299,9 @@ async function runReplyReview(params: {
   };
 }
 
-function parseChunkOutput(raw: string): {
-  findings: FindingOutput[];
-  summary?: string;
-  verdict?: Verdict;
-  confidence?: number;
-  intentMatch?: IntentMatchOutput;
-} {
+function parseChunkOutput(raw: string): ChunkReviewOutput {
   const json: unknown = JSON.parse(raw);
-  const parsed = chunkReviewSchema.parse(json);
-  return {
-    findings: parsed.findings,
-    summary: parsed.summary,
-    verdict: parsed.verdict,
-    confidence: parsed.confidence,
-    intentMatch: parsed.intentMatch,
-  };
+  return chunkReviewSchema.parse(json);
 }
 
 export interface PipelineResult {
@@ -311,6 +314,7 @@ export async function runReviewPipeline(
   request: ReviewRequestDoc,
   heartbeat: () => Promise<void>,
 ): Promise<PipelineResult> {
+  const pipelineStart = Date.now();
   const repos = await reposCollection();
   const repo = await repos.findOne({ _id: request.repoId });
   if (!repo) throw new Error("repo not found");
@@ -434,7 +438,7 @@ export async function runReviewPipeline(
   const { chunks, unreviewed } = chunkFiles(kept, {
     chunkTokens: effectiveBudget(CHUNK_TOKENS, provider),
     totalInputBudget: effectiveBudget(TOTAL_INPUT_BUDGET_TOKENS, provider),
-    maxChunks: Math.min(repo.config.maxChunks, MAX_PARALLEL_CHUNKS),
+    maxChunks: Math.min(repo.config.maxChunks, MAX_CHUNKS),
   });
 
   const systemPrompt = buildSystemPrompt(
@@ -450,18 +454,24 @@ export async function runReviewPipeline(
     status: "match",
     explanation: "",
   };
-  let summaryText = "";
+  let modelSummary = "";
+  let verdictReason = "";
+  const chunkSummaries: string[] = [];
+  const intentNotes: string[] = [];
 
   const newHunkLinesByPath = new Map<string, Set<number>>();
   let partialCoverage = false;
 
-  // Chunks run in PARALLEL: wall time = max(call latency), not the sum. A chunk
-  // that fails or times out is dropped (partial coverage) as long as one succeeds.
+  // A chunk that fails, times out, or is skipped for lack of time is dropped
+  // (partial coverage) as long as one other chunk succeeds.
   const runChunk = async (
     chunk: (typeof chunks)[number],
     index: number,
   ): Promise<ReturnType<typeof parseChunkOutput> | null> => {
     if (!chunk) return null;
+    if (Date.now() - pipelineStart > GLOBAL_DEADLINE_MS) {
+      throw new Error(`chunk ${index + 1}: skipped, past global deadline`);
+    }
     const formatted = formatFilesForPrompt(chunk.files);
     for (const [path, lines] of formatted.newHunkLinesByPath) {
       newHunkLinesByPath.set(path, lines);
@@ -491,6 +501,10 @@ export async function runReviewPipeline(
       messages,
       maxTokens: MAX_TOKENS_CHUNK,
       timeoutMs: CALL_TIMEOUT_MS,
+      // Reasoning stays ON: with it disabled the model missed a planted
+      // open-redirect and emitted line numbers that our hunk filter drops.
+      thinking: "enabled",
+      retryDeadlineAt: pipelineStart + RETRY_DEADLINE_MS,
     });
     const latencyMs = Date.now() - started;
     const cost = computeCostUsd(completion.usage, pricing);
@@ -524,9 +538,7 @@ export async function runReviewPipeline(
     return output;
   };
 
-  const settled = await Promise.allSettled(
-    chunks.map((chunk, index) => runChunk(chunk, index)),
-  );
+  const settled = await mapWithConcurrency(chunks, CONCURRENCY_LIMIT, runChunk);
   await heartbeat();
 
   const succeeded = settled.filter(
@@ -548,7 +560,19 @@ export async function runReviewPipeline(
     allFindings.push(...output.findings);
     if (output.confidence !== undefined) confidence = output.confidence;
     if (output.intentMatch) intentMatch = output.intentMatch;
-    if (output.summary) summaryText = output.summary;
+    if (output.summary) modelSummary = output.summary;
+    if (output.verdictReason) verdictReason = output.verdictReason;
+    if (output.chunkSummary) chunkSummaries.push(output.chunkSummary);
+    if (output.intentNotes) intentNotes.push(output.intentNotes);
+  }
+
+  // OUTPUT_SCHEMA_CHUNK asks for `intentNotes`, not `intentMatch`, so without
+  // this every multi-chunk review stores an empty intent explanation.
+  if (!intentMatch.explanation && intentNotes.length > 0) {
+    intentMatch = {
+      ...intentMatch,
+      explanation: intentNotes.join(" ").slice(0, 400),
+    };
   }
 
   const lineFiltered = filterFindingsToValidLines(
@@ -561,11 +585,16 @@ export async function runReviewPipeline(
     removedDiffText: collectRemovedLines(kept.map((f) => f.patch)),
     customGuidelines: repo.config.customGuidelines,
   });
-  if (scoped.droppedCount > 0 || scoped.downgradedCount > 0) {
+  if (
+    scoped.droppedCount > 0 ||
+    scoped.downgradedCount > 0 ||
+    scoped.securityKeptCount > 0
+  ) {
     log.info("review.scope_guard", {
       requestId: request._id.toHexString(),
       dropped: scoped.droppedCount,
       downgraded: scoped.downgradedCount,
+      securityKept: scoped.securityKeptCount,
     });
   }
   const findingsOut: Finding[] = scoped.kept.map((f) => ({
@@ -580,12 +609,12 @@ export async function runReviewPipeline(
   });
 
   const finalIntent: IntentMatch = intentMatch;
-  if (!summaryText) {
-    summaryText =
-      resolution.verdict === "APPROVE"
-        ? "All good — no blocking issues found."
-        : "See comments.";
-  }
+  const summaryText = composeSummary({
+    verdict: resolution.verdict,
+    summary: modelSummary,
+    verdictReason,
+    chunkSummaries,
+  });
 
   const skippedForBudget = [
     ...unreviewed.map((f) => f.filename),
