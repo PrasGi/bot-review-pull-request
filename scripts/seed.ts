@@ -39,7 +39,7 @@ async function main(): Promise<void> {
     adminEmail,
     adminPasswordHash,
     defaultProvider: "glm",
-    defaultModel: "glm-4.6",
+    defaultModel: "glm-5.2",
     defaultReviewProfile: existing?.defaultReviewProfile ?? "chill",
     providerKeys: existing?.providerKeys ?? providerKeys,
     modelPricing: existing?.modelPricing ?? DEFAULT_PRICING,

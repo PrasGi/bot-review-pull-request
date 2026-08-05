@@ -67,6 +67,24 @@ After creating:
 - GLM (default): sign up at https://z.ai/model-api, top up, create an API key → `GLM_API_KEY`.
 - Optional others: `KIMI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`.
 
+### Which GLM endpoint (`GLM_BASE_URL`)
+
+The **same API key works on both**; the endpoint decides which wallet is charged and which rules apply.
+
+| | `/api/coding/paas/v4/` (default) | `/api/paas/v4/` |
+|---|---|---|
+| Billing | GLM Coding Plan subscription | prepaid pay-as-you-go balance |
+| Permitted use | officially supported IDE tools only | any application, including bots |
+| Measured concurrency | ~5 parallel requests (Coding Lite, glm-5.2) | per-model, glm-5.2 listed at 10 |
+| On abuse | throttle → freeze → ban after 3 violations, no refund | plain HTTP 429 |
+
+> ⚠️ The default is the Coding Plan endpoint, which is **cheaper and measurably fast**, but its
+> [terms](https://docs.z.ai/legal-agreement/subscription-terms) forbid "directly invoking model
+> APIs from your own applications, bots, websites, SaaS products or other systems". Running this
+> bot on it is a deliberate, accepted risk. To run compliant instead, top up a pay-as-you-go
+> balance and set `GLM_BASE_URL=https://api.z.ai/api/paas/v4/` — no key change needed.
+> Without a balance that endpoint returns `1113 Insufficient balance` on every call.
+
 ---
 
 ## 5. Generate secrets

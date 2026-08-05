@@ -26,6 +26,12 @@ const envSchema = z.object({
   // Optional in env: providers may instead be configured (encrypted) via the
   // dashboard settings. Presence is enforced at review time, not at boot.
   GLM_API_KEY: z.string().optional(),
+  // Coding Plan endpoint: flat subscription, measured at ~5x real concurrency.
+  // Its terms restrict the quota to interactive IDE tools and forbid invoking
+  // it from "your own applications, bots, ... or other systems", with account
+  // bans after repeated violations — an accepted, deliberate risk here.
+  // Switch to https://api.z.ai/api/paas/v4/ (pay-per-token, needs a prepaid
+  // balance) to run compliant; the same API key works on both.
   GLM_BASE_URL: z.string().default("https://api.z.ai/api/coding/paas/v4/"),
   KIMI_API_KEY: z.string().optional(),
   KIMI_BASE_URL: z.string().default("https://api.moonshot.ai/v1"),

@@ -51,7 +51,7 @@ Request a review on a GitHub PR → the bot fetches the diff, runs it through an
 | MongoDB cluster | [mongodb.com/cloud/atlas](https://mongodb.com/cloud/atlas) (free M0) | `MONGODB_URI` |
 | Hosting | [vercel.com](https://vercel.com) (Hobby + Fluid compute) | `APP_URL` |
 | GitHub App | GitHub → Developer settings | 5 GitHub secrets (below) |
-| AI key | [z.ai/model-api](https://z.ai/model-api) (GLM, default) | `GLM_API_KEY` |
+| AI key | [z.ai/model-api](https://z.ai/model-api) (GLM, default) — one key works on both endpoints, see [`docs/setup.md`](./docs/setup.md#which-glm-endpoint-glm_base_url) | `GLM_API_KEY` |
 | `pnpm` + `openssl` | local machine | run scripts & generate secrets |
 
 ### Step 1 — Deploy first (empty is fine)
@@ -216,6 +216,7 @@ pnpm test           # vitest
 pnpm seed           # seed admin + settings (idempotent)
 pnpm connect        # CLI: print the GitHub install URL
 pnpm set-profile <chill|normal|professional|expert>   # bulk-set review profile on all repos
+pnpm set-model <model> [--clear-overrides]            # set the global default model (e.g. glm-5.2)
 ```
 
 ---
