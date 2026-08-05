@@ -41,7 +41,7 @@ function buildProvider(
         name: "glm",
         apiKey,
         baseURL: env.GLM_BASE_URL,
-        deterministicExtraBody: { do_sample: false },
+        vendorParams: { do_sample: false },
       });
     case "kimi":
       return createOpenAICompatibleProvider({

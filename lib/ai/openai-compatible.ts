@@ -7,11 +7,14 @@ import {
   type AICompletionParams,
 } from "@/lib/ai/provider";
 
+const LARGE_OUTPUT_CAP = 16_384;
+const RATE_LIMIT_BACKOFF_MS = 2_000;
+
 interface OpenAICompatibleOptions {
   name: AIProviderName;
   apiKey: string;
   baseURL?: string;
-  deterministicExtraBody?: Record<string, unknown>;
+  vendorParams?: Record<string, unknown>;
 }
 
 export function createOpenAICompatibleProvider(
@@ -36,9 +39,13 @@ export function createOpenAICompatibleProvider(
         temperature: 0,
         top_p: 1,
         response_format: { type: "json_object" },
-        ...(options.deterministicExtraBody
-          ? { extra_body: options.deterministicExtraBody }
+        // Vendor extensions go at the top level: the Node SDK forwards unknown
+        // keys verbatim and has no `extra_body` wrapper (that is Python-only).
+        ...(params.thinking ? { thinking: { type: params.thinking } } : {}),
+        ...(params.reasoningEffort
+          ? { reasoning_effort: params.reasoningEffort }
           : {}),
+        ...(options.vendorParams ?? {}),
       } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
       params.timeoutMs ? { timeout: params.timeoutMs } : undefined,
     );
@@ -47,8 +54,12 @@ export function createOpenAICompatibleProvider(
     const content = choice?.message?.content;
     if (!content) {
       const reason = choice?.finish_reason ?? "unknown";
+      // Reasoning models spend max_tokens on hidden thinking before emitting
+      // content; surfacing the count is what tells these two failures apart.
+      const reasoning =
+        response.usage?.completion_tokens_details?.reasoning_tokens ?? 0;
       throw new Error(
-        `${options.name}: empty completion (finish_reason=${reason})`,
+        `${options.name}: empty completion (finish_reason=${reason}, reasoning_tokens=${reasoning})`,
       );
     }
 
@@ -64,14 +75,31 @@ export function createOpenAICompatibleProvider(
   return {
     name: options.name,
     async complete(params: AICompletionParams): Promise<AICompletion> {
+      const mayRetry = (): boolean =>
+        params.retryDeadlineAt === undefined ||
+        Date.now() < params.retryDeadlineAt;
+
       try {
         return await callOnce(params);
       } catch (error) {
         const msg = error instanceof Error ? error.message : "";
-        // finish_reason=length means the response was truncated at the output
-        // cap; retrying with the same budget fails identically, so double it.
+        if (!mayRetry()) throw error;
+
+        // 429 is the provider refusing a concurrency slot, not a bad request.
+        // Measured: firing 8 parallel calls at a Coding Plan tier rejects ~2 of
+        // them outright, which would silently become dropped chunks.
+        if (error instanceof OpenAI.APIError && error.status === 429) {
+          await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS));
+          return callOnce(params);
+        }
+
         if (msg.includes("finish_reason=length")) {
-          return callOnce({ ...params, maxTokens: params.maxTokens * 2 });
+          // Below the ceiling the output genuinely needed more room, so double.
+          // At or above it, doubling mostly funds a longer reasoning loop and
+          // risks the wall-clock budget; shallow reasoning still returns JSON.
+          return params.maxTokens < LARGE_OUTPUT_CAP
+            ? callOnce({ ...params, maxTokens: params.maxTokens * 2 })
+            : callOnce({ ...params, reasoningEffort: "low" });
         }
         if (msg.includes("empty completion")) {
           return callOnce(params);

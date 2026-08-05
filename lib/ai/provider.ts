@@ -15,11 +15,17 @@ export interface AICompletion {
   usage: AIUsage;
 }
 
+export type ThinkingMode = "enabled" | "disabled";
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high";
+
 export interface AICompletionParams {
   model: string;
   messages: AIMessage[];
   maxTokens: number;
   timeoutMs?: number;
+  thinking?: ThinkingMode;
+  reasoningEffort?: ReasoningEffort;
+  retryDeadlineAt?: number;
 }
 
 export interface AIProvider {
