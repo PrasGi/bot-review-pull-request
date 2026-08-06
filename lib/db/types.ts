@@ -72,10 +72,16 @@ export interface UserConnectionDoc {
   updatedAt: Date;
 }
 
+export interface AuthorProfileRule {
+  login: string;
+  profile: ReviewProfile;
+}
+
 export interface RepoConfig {
   provider: AIProviderName | null;
   model: string | null;
   reviewProfile: ReviewProfile;
+  authorProfiles?: AuthorProfileRule[];
   autoVerdict: boolean;
   confidenceThreshold: number;
   customGuidelines: string;

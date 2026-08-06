@@ -60,6 +60,7 @@ import {
 } from "@/lib/review/verdict";
 import { applyScopeGuard, collectRemovedLines } from "@/lib/review/scope-guard";
 import { mapWithConcurrency } from "@/lib/review/concurrency";
+import { resolveReviewProfile } from "@/lib/review/profile";
 import { PrClosedError } from "@/lib/review/errors";
 import { log } from "@/lib/logger";
 import { buildReviewBody, composeSummary } from "@/lib/review/summary";
@@ -441,9 +442,10 @@ export async function runReviewPipeline(
     maxChunks: Math.min(repo.config.maxChunks, MAX_CHUNKS),
   });
 
+  const reviewProfile = resolveReviewProfile(repo.config, pr.authorLogin);
   const systemPrompt = buildSystemPrompt(
-    settings.promptTemplates[repo.config.reviewProfile].system,
-    repo.config.reviewProfile,
+    settings.promptTemplates[reviewProfile].system,
+    reviewProfile,
     repo.config.customGuidelines,
     chunks.length === 1,
   );
@@ -579,9 +581,9 @@ export async function runReviewPipeline(
     allFindings,
     newHunkLinesByPath,
   );
-  const knobFiltered = enforceKnobs(lineFiltered.kept, repo.config.reviewProfile);
+  const knobFiltered = enforceKnobs(lineFiltered.kept, reviewProfile);
   const scoped = applyScopeGuard(knobFiltered.kept, {
-    profile: repo.config.reviewProfile,
+    profile: reviewProfile,
     removedDiffText: collectRemovedLines(kept.map((f) => f.patch)),
     customGuidelines: repo.config.customGuidelines,
   });

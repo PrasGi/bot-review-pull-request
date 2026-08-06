@@ -21,12 +21,13 @@ export function defaultRepoConfig(): RepoConfig {
     provider: null,
     model: null,
     reviewProfile: "chill",
+    authorProfiles: [],
     autoVerdict: true,
     confidenceThreshold: 0.6,
     customGuidelines: "",
     ignorePatterns: [],
     contextFiles: [],
-    maxChunks: 5,
+    maxChunks: 8,
   };
 }
 

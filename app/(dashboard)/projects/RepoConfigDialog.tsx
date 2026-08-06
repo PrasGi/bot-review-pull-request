@@ -17,10 +17,16 @@ import {
 import { mutateJson, FetchError } from '@/lib/ui/swr';
 import { toast } from '@/components/ui/Toast';
 
+export type AuthorProfileRule = {
+  login: string;
+  profile: 'chill' | 'normal' | 'professional' | 'expert';
+};
+
 export type RepoConfig = {
   provider: 'anthropic' | 'openai' | 'glm' | 'kimi' | null;
   model: string | null;
   reviewProfile: 'chill' | 'normal' | 'professional' | 'expert';
+  authorProfiles?: AuthorProfileRule[];
   autoVerdict: boolean;
   confidenceThreshold: number;
   customGuidelines: string;
@@ -32,10 +38,17 @@ export type RepoConfig = {
 type ReviewProfile = RepoConfig['reviewProfile'];
 type ProviderValue = Exclude<RepoConfig['provider'], null>;
 
+type AuthorProfileRow = {
+  id: string;
+  login: string;
+  profile: ReviewProfile;
+};
+
 type FormState = {
   provider: string;
   model: string;
   reviewProfile: ReviewProfile;
+  authorProfiles: AuthorProfileRow[];
   autoVerdict: boolean;
   confidenceThreshold: number;
   customGuidelines: string;
@@ -71,6 +84,17 @@ const PROFILE_OPTIONS: { value: string; label: string }[] = [
 const VALID_PROVIDERS: ProviderValue[] = ['anthropic', 'openai', 'glm', 'kimi'];
 const VALID_PROFILES: ReviewProfile[] = ['chill', 'normal', 'professional', 'expert'];
 
+const MAX_AUTHOR_PROFILES = 50;
+// Mirrors authorProfileRuleSchema.login in lib/schemas: GitHub logins are
+// alphanumeric with single non-trailing hyphens, 1–39 chars.
+const GITHUB_LOGIN_RE = /^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$/;
+
+let authorRowSeq = 0;
+function makeAuthorRow(login = '', profile: ReviewProfile = 'normal'): AuthorProfileRow {
+  authorRowSeq += 1;
+  return { id: `apr-${authorRowSeq}`, login, profile };
+}
+
 function isProviderValue(v: string): v is ProviderValue {
   return (VALID_PROVIDERS as string[]).includes(v);
 }
@@ -84,6 +108,9 @@ function configToForm(config: RepoConfig): FormState {
     provider: config.provider ?? '',
     model: config.model ?? '',
     reviewProfile: config.reviewProfile,
+    authorProfiles: (config.authorProfiles ?? []).map((r) =>
+      makeAuthorRow(r.login, r.profile)
+    ),
     autoVerdict: config.autoVerdict,
     confidenceThreshold: config.confidenceThreshold,
     customGuidelines: config.customGuidelines,
@@ -110,12 +137,19 @@ function validateForm(form: FormState): string | null {
   const longContext = contextLines.find((l) => l.length > 300);
   if (longContext) return `Context file path too long (max 300 chars): "${longContext.slice(0, 40)}…"`;
 
+  const authorRules = form.authorProfiles.filter((r) => r.login.trim() !== '');
+  if (authorRules.length > MAX_AUTHOR_PROFILES)
+    return `Author overrides: at most ${MAX_AUTHOR_PROFILES} entries allowed`;
+  const badLogin = authorRules.find((r) => !GITHUB_LOGIN_RE.test(r.login.trim()));
+  if (badLogin)
+    return `Invalid GitHub username: "${badLogin.login.trim().slice(0, 40)}"`;
+
   if (form.customGuidelines.length > 2000)
     return 'Custom guidelines must be at most 2000 characters';
   if (form.confidenceThreshold < 0.3 || form.confidenceThreshold > 0.9)
     return 'Confidence threshold must be between 0.30 and 0.90';
-  if (form.maxChunks < 1 || form.maxChunks > 5)
-    return 'Max chunks must be between 1 and 5';
+  if (form.maxChunks < 1 || form.maxChunks > 8)
+    return 'Max chunks must be between 1 and 8';
 
   return null;
 }
@@ -130,6 +164,10 @@ function formToConfig(form: FormState): Partial<RepoConfig> {
     .map((l) => l.trim())
     .filter(Boolean);
 
+  const authorProfiles: AuthorProfileRule[] = form.authorProfiles
+    .map((r) => ({ login: r.login.trim(), profile: r.profile }))
+    .filter((r) => r.login !== '');
+
   const provider: RepoConfig['provider'] =
     isProviderValue(form.provider) ? form.provider : null;
 
@@ -137,6 +175,7 @@ function formToConfig(form: FormState): Partial<RepoConfig> {
     provider,
     model: form.model.trim() === '' ? null : form.model.trim(),
     reviewProfile: form.reviewProfile,
+    authorProfiles,
     autoVerdict: form.autoVerdict,
     confidenceThreshold: form.confidenceThreshold,
     customGuidelines: form.customGuidelines,
@@ -223,6 +262,90 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
         disabled={saving}
       />
 
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-[var(--text)]">
+            Per-author Overrides
+          </span>
+          <span className="text-xs text-[var(--text-muted)]">
+            {form.authorProfiles.length}/{MAX_AUTHOR_PROFILES}
+          </span>
+        </div>
+        <p className="text-xs text-[var(--text-muted)]">
+          Use the GitHub <strong>username</strong> (e.g. <code>aziz-yoco</code>) — not the
+          display name or email. Authors not listed here use the review profile above.
+        </p>
+
+        {form.authorProfiles.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {form.authorProfiles.map((row, index) => (
+              <div key={row.id} className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <Input
+                    aria-label={`GitHub username for override ${index + 1}`}
+                    placeholder="github-username"
+                    value={row.login}
+                    onChange={(e) => {
+                      const login = e.target.value;
+                      set(
+                        'authorProfiles',
+                        form.authorProfiles.map((r) =>
+                          r.id === row.id ? { ...r, login } : r
+                        )
+                      );
+                    }}
+                    disabled={saving}
+                  />
+                </div>
+                <div className="w-[13rem] shrink-0">
+                  <Select
+                    aria-label={`Review profile for override ${index + 1}`}
+                    value={row.profile}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!isReviewProfile(val)) return;
+                      set(
+                        'authorProfiles',
+                        form.authorProfiles.map((r) =>
+                          r.id === row.id ? { ...r, profile: val } : r
+                        )
+                      );
+                    }}
+                    options={PROFILE_OPTIONS}
+                    disabled={saving}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    set(
+                      'authorProfiles',
+                      form.authorProfiles.filter((r) => r.id !== row.id)
+                    )
+                  }
+                  disabled={saving}
+                  aria-label={`Remove override for ${row.login.trim() || `row ${index + 1}`}`}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              set('authorProfiles', [...form.authorProfiles, makeAuthorRow()])
+            }
+            disabled={saving || form.authorProfiles.length >= MAX_AUTHOR_PROFILES}
+          >
+            Add override
+          </Button>
+        </div>
+      </div>
+
       <Switch
         label="Auto Verdict — post verdict automatically after review"
         checked={form.autoVerdict}
@@ -263,7 +386,7 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
         </div>
         <Slider
           min={1}
-          max={5}
+          max={8}
           step={1}
           value={[form.maxChunks]}
           onValueChange={([v]) => {
@@ -274,7 +397,7 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
         />
         <div className="flex justify-between text-xs text-[var(--text-muted)]">
           <span>1 — minimal</span>
-          <span>5 — thorough</span>
+          <span>8 — thorough</span>
         </div>
       </div>
 

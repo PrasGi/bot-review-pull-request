@@ -6,16 +6,35 @@ export const loginSchema = z.object({
 });
 export type LoginInput = z.infer<typeof loginSchema>;
 
+const reviewProfileSchema = z.enum([
+  "chill",
+  "normal",
+  "professional",
+  "expert",
+]);
+
+// GitHub logins: alphanumeric and single hyphens, max 39 chars.
+export const authorProfileRuleSchema = z.object({
+  login: z
+    .string()
+    .min(1)
+    .max(39)
+    .regex(/^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$/, "invalid GitHub username"),
+  profile: reviewProfileSchema,
+});
+export type AuthorProfileRuleInput = z.infer<typeof authorProfileRuleSchema>;
+
 export const repoConfigSchema = z.object({
   provider: z.enum(["anthropic", "openai", "glm", "kimi"]).nullable(),
   model: z.string().nullable(),
-  reviewProfile: z.enum(["chill", "normal", "professional", "expert"]),
+  reviewProfile: reviewProfileSchema,
+  authorProfiles: z.array(authorProfileRuleSchema).max(50),
   autoVerdict: z.boolean(),
   confidenceThreshold: z.number().min(0.3).max(0.9),
   customGuidelines: z.string().max(2000),
   ignorePatterns: z.array(z.string().max(200)).max(50),
   contextFiles: z.array(z.string().max(300)).max(20),
-  maxChunks: z.number().int().min(1).max(5),
+  maxChunks: z.number().int().min(1).max(8),
 });
 export type RepoConfigInput = z.infer<typeof repoConfigSchema>;
 
