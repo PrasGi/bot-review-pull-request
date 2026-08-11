@@ -6,6 +6,7 @@ import { cn } from '@/lib/ui/cn';
 import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { ThemeToggle } from './ThemeToggle';
+import { WhatsNew } from './WhatsNew';
 import { useSidebar } from './Sidebar';
 
 type HeaderProps = {
@@ -41,6 +42,7 @@ function Header({ title }: HeaderProps): React.ReactElement {
       </div>
 
       <div className="flex items-center gap-2">
+        <WhatsNew />
         <ThemeToggle />
         <Tooltip content="System healthy">
           <div
