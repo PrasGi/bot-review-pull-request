@@ -34,7 +34,7 @@ export const repoConfigSchema = z.object({
   customGuidelines: z.string().max(2000),
   ignorePatterns: z.array(z.string().max(200)).max(50),
   contextFiles: z.array(z.string().max(300)).max(20),
-  maxChunks: z.number().int().min(1).max(8),
+  maxChunks: z.number().int().min(1).max(84),
 });
 export type RepoConfigInput = z.infer<typeof repoConfigSchema>;
 

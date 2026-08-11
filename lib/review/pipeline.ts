@@ -63,7 +63,11 @@ import { mapWithConcurrency } from "@/lib/review/concurrency";
 import { resolveReviewProfile } from "@/lib/review/profile";
 import { PrClosedError } from "@/lib/review/errors";
 import { log } from "@/lib/logger";
-import { buildReviewBody, composeSummary } from "@/lib/review/summary";
+import {
+  buildReviewBody,
+  composeSummary,
+  type IncompleteReason,
+} from "@/lib/review/summary";
 import { recordAiCall } from "@/lib/review/audit";
 import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 
@@ -76,18 +80,18 @@ import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 // ceil(chunks / CONCURRENCY_LIMIT) waves, kept under Vercel's 300s hard cap by
 // the deadlines below. PRs beyond the budget get an honest partial review.
 const CHUNK_TOKENS = 12_000;
-const TOTAL_INPUT_BUDGET_TOKENS = 96_000;
-const MAX_CHUNKS = 8;
+const TOTAL_INPUT_BUDGET_TOKENS = 1_000_000;
+const MAX_CHUNKS = 84;
 const CONCURRENCY_LIMIT = 4;
-const CALL_TIMEOUT_MS = 140_000;
+const CALL_TIMEOUT_MS = 240_000;
 const MAX_TOKENS_CHUNK = 16_384;
 
 // Measured from pipeline start. RETRY stops new attempts early enough that a
 // retry can still finish and be aggregated; GLOBAL reserves the remainder for
-// submitting the review. Posting a partial review always beats a 300s timeout
-// that posts nothing.
-const RETRY_DEADLINE_MS = 200_000;
-const GLOBAL_DEADLINE_MS = 240_000;
+// submitting the review. A review that says "I ran out of time" always beats
+// one that never gets posted.
+const RETRY_DEADLINE_MS = 1_500_000;
+const GLOBAL_DEADLINE_MS = 1_800_000;
 
 function splitRepo(fullName: string): { owner: string; repo: string } {
   const [owner, repo] = fullName.split("/");
@@ -463,6 +467,7 @@ export async function runReviewPipeline(
 
   const newHunkLinesByPath = new Map<string, Set<number>>();
   let partialCoverage = false;
+  let deadlineHit = false;
 
   // A chunk that fails, times out, or is skipped for lack of time is dropped
   // (partial coverage) as long as one other chunk succeeds.
@@ -472,6 +477,7 @@ export async function runReviewPipeline(
   ): Promise<ReturnType<typeof parseChunkOutput> | null> => {
     if (!chunk) return null;
     if (Date.now() - pipelineStart > GLOBAL_DEADLINE_MS) {
+      deadlineHit = true;
       throw new Error(`chunk ${index + 1}: skipped, past global deadline`);
     }
     const formatted = formatFilesForPrompt(chunk.files);
@@ -498,16 +504,40 @@ export async function runReviewPipeline(
     const messages = buildMessages(systemPrompt, userPrompt);
 
     const started = Date.now();
-    const completion = await instance.complete({
-      model,
-      messages,
-      maxTokens: MAX_TOKENS_CHUNK,
-      timeoutMs: CALL_TIMEOUT_MS,
-      // Reasoning stays ON: with it disabled the model missed a planted
-      // open-redirect and emitted line numbers that our hunk filter drops.
-      thinking: "enabled",
-      retryDeadlineAt: pipelineStart + RETRY_DEADLINE_MS,
-    });
+    const auditPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+    let completion: import("@/lib/ai/provider").AICompletion;
+    try {
+      completion = await instance.complete({
+        model,
+        messages,
+        maxTokens: MAX_TOKENS_CHUNK,
+        timeoutMs: CALL_TIMEOUT_MS,
+        // Reasoning stays ON: with it disabled the model missed a planted
+        // open-redirect and emitted line numbers that our hunk filter drops.
+        thinking: "enabled",
+        retryDeadlineAt: pipelineStart + RETRY_DEADLINE_MS,
+      });
+    } catch (error) {
+      // Without this the throw escapes before recordAiCall below and the chunk
+      // vanishes with no trace at all, leaving the failure undiagnosable.
+      await recordAiCall({
+        requestId: request._id,
+        repoId: repo._id,
+        userConnectionId: reviewer._id,
+        provider,
+        model,
+        purpose: "chunk-review",
+        templateVersion: TEMPLATE_VERSION,
+        prompt: auditPrompt,
+        response: "",
+        usage: { promptTokens: 0, completionTokens: 0 },
+        costUsd: 0,
+        latencyMs: Date.now() - started,
+        status: "error",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
     const latencyMs = Date.now() - started;
     const cost = computeCostUsd(completion.usage, pricing);
 
@@ -610,9 +640,23 @@ export async function runReviewPipeline(
     config: repo.config,
   });
 
+  // An incomplete read cannot support a judgement. Approving code we never saw
+  // is unsafe, and demanding changes we cannot justify is noise — so we only
+  // report what we found and say plainly why the review stopped early.
+  const incomplete: IncompleteReason | null =
+    unreviewed.length > 0
+      ? "token_budget"
+      : deadlineHit
+        ? "time_budget"
+        : partialCoverage
+          ? "chunk_failed"
+          : null;
+
+  const verdict: Verdict = incomplete ? "COMMENT" : resolution.verdict;
+
   const finalIntent: IntentMatch = intentMatch;
   const summaryText = composeSummary({
-    verdict: resolution.verdict,
+    verdict,
     summary: modelSummary,
     verdictReason,
     chunkSummaries,
@@ -635,10 +679,11 @@ export async function runReviewPipeline(
       : undefined;
 
   const body = buildReviewBody({
-    verdict: resolution.verdict,
+    verdict,
     summary: summaryText,
     caveat: resolution.caveat,
     ...(partial ? { partial } : {}),
+    ...(incomplete ? { incomplete } : {}),
     newerCommits: request.newerCommitsFlag ?? false,
     shortSha: pr.headSha.slice(0, 7),
   });
@@ -657,7 +702,7 @@ export async function runReviewPipeline(
     repo: repoName,
     prNumber: request.prNumber,
     commitId: pr.headSha,
-    event: resolution.verdict,
+    event: verdict,
     body,
     comments: inlineComments,
   });
@@ -669,7 +714,7 @@ export async function runReviewPipeline(
   return persistReview({
     request,
     repoId: repo._id,
-    verdict: resolution.verdict,
+    verdict,
     verdictForced: resolution.forced,
     confidence,
     summary: summaryText,

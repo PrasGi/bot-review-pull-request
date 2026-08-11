@@ -50,6 +50,17 @@ export function composeSummary(input: SummaryComposition): string {
   return parts.length > 0 ? parts.join("\n\n") : GENERIC_FALLBACK[input.verdict];
 }
 
+export type IncompleteReason = "token_budget" | "time_budget" | "chunk_failed";
+
+const INCOMPLETE_NOTE: Record<IncompleteReason, string> = {
+  token_budget:
+    "**Token limit reached** — this PR is bigger than one review pass can hold, so part of it was never read.",
+  time_budget:
+    "**Time limit reached** — the review hit its 30-minute ceiling before every file was read.",
+  chunk_failed:
+    "**Incomplete read** — part of the diff failed to come back from the model, so it was never reviewed.",
+};
+
 export interface PartialReviewInfo {
   totalFiles: number;
   reviewedCount: number;
@@ -61,6 +72,7 @@ export interface SummaryInput {
   summary: string;
   caveat?: string;
   partial?: PartialReviewInfo;
+  incomplete?: IncompleteReason | undefined;
   newerCommits: boolean;
   shortSha: string;
 }
@@ -76,8 +88,18 @@ export function buildReviewBody(input: SummaryInput): string {
     parts.push("", `> ⚠️ ${input.caveat}`);
   }
 
+  if (input.incomplete) {
+    const covered = input.partial
+      ? ` I read ${input.partial.reviewedCount} of ${input.partial.totalFiles} files.`
+      : "";
+    parts.push(
+      "",
+      `> ⚠️ ${INCOMPLETE_NOTE[input.incomplete]}${covered} Because the read is incomplete this is a **comment only** — not an approval and not a change request. Split the PR or re-request to get full coverage.`,
+    );
+  }
+
   if (input.partial) {
-    const { totalFiles, reviewedCount, skippedFiles } = input.partial;
+    const { skippedFiles } = input.partial;
     const shown = skippedFiles.slice(0, 10);
     const more =
       skippedFiles.length > shown.length
@@ -85,7 +107,7 @@ export function buildReviewBody(input: SummaryInput): string {
         : "";
     parts.push(
       "",
-      `> ⚠️ **Partial review**: this PR is large (${totalFiles} files). I reviewed the ${reviewedCount} highest-priority files within the time budget. Not reviewed: ${shown.map((f) => `\`${f}\``).join(", ")}${more}. Split the PR or re-request for full coverage.`,
+      `> Not reviewed: ${shown.map((f) => `\`${f}\``).join(", ")}${more}.`,
     );
   }
 
