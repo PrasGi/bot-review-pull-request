@@ -89,6 +89,11 @@ const MAX_AUTHOR_PROFILES = 50;
 // alphanumeric with single non-trailing hyphens, 1–39 chars.
 const GITHUB_LOGIN_RE = /^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$/;
 
+// Mirrors repoConfigSchema.maxChunks in lib/schemas and MAX_CHUNKS in
+// lib/review/pipeline: 84 chunks × 12k tokens ≈ the 1M total input budget.
+const MIN_CHUNKS = 1;
+const MAX_CHUNKS = 84;
+
 let authorRowSeq = 0;
 function makeAuthorRow(login = '', profile: ReviewProfile = 'normal'): AuthorProfileRow {
   authorRowSeq += 1;
@@ -148,8 +153,8 @@ function validateForm(form: FormState): string | null {
     return 'Custom guidelines must be at most 2000 characters';
   if (form.confidenceThreshold < 0.3 || form.confidenceThreshold > 0.9)
     return 'Confidence threshold must be between 0.30 and 0.90';
-  if (form.maxChunks < 1 || form.maxChunks > 8)
-    return 'Max chunks must be between 1 and 8';
+  if (form.maxChunks < MIN_CHUNKS || form.maxChunks > MAX_CHUNKS)
+    return `Max chunks must be between ${MIN_CHUNKS} and ${MAX_CHUNKS}`;
 
   return null;
 }
@@ -385,8 +390,8 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
           </span>
         </div>
         <Slider
-          min={1}
-          max={8}
+          min={MIN_CHUNKS}
+          max={MAX_CHUNKS}
           step={1}
           value={[form.maxChunks]}
           onValueChange={([v]) => {
@@ -396,8 +401,8 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
           aria-label="Max chunks"
         />
         <div className="flex justify-between text-xs text-[var(--text-muted)]">
-          <span>1 — minimal</span>
-          <span>8 — thorough</span>
+          <span>{MIN_CHUNKS} — minimal</span>
+          <span>{MAX_CHUNKS} — thorough</span>
         </div>
       </div>
 
