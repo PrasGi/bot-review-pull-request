@@ -105,7 +105,6 @@ const CONFIG: RepoConfig = {
   model: null,
   reviewProfile: "chill",
   autoVerdict: true,
-  confidenceThreshold: 0.6,
   customGuidelines: "",
   ignorePatterns: [],
   contextFiles: [],

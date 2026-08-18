@@ -23,7 +23,6 @@ export function defaultRepoConfig(): RepoConfig {
     reviewProfile: "chill",
     authorProfiles: [],
     autoVerdict: true,
-    confidenceThreshold: 0.6,
     customGuidelines: "",
     ignorePatterns: [],
     contextFiles: [],

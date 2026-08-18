@@ -31,7 +31,7 @@ Request a review on a GitHub PR → the bot fetches the diff, runs it through an
 | 🧩 **Multi-provider AI** | GLM (default), Kimi, OpenAI, Anthropic — switchable per repo, exact token counting |
 | 👥 **Multi-account / multi-org** | Connect several GitHub accounts; org repos supported (incl. member-request → owner-approval flow) |
 | 📊 **Live dashboard** | Requests (auto-refresh 5s), AI usage & cost, per-repo config, connection health |
-| 🔒 **Safe by design** | Silent on the PR when it fails · low-confidence caps verdict to COMMENT · encrypted tokens (AES-256-GCM) |
+| 🔒 **Safe by design** | Silent on the PR when it fails · uncertain findings never block, they ask you to double-check · encrypted tokens (AES-256-GCM) |
 
 ### Tech stack
 
@@ -189,7 +189,6 @@ Author opens PR  →  requests review from @you  →  🤖 bot reviews & posts A
 | **Review profile** | `chill` (lenient mentor) → `expert` (principal-level strict) |
 | **AI provider / model** | override the global default per repo |
 | **Auto-verdict** | off = always COMMENT (never auto-approve/block) |
-| **Confidence threshold** | low AI confidence → caps verdict to COMMENT |
 | **Custom guidelines** | repo-specific rules injected into the prompt |
 | **Ignore patterns** | globs to skip (on top of built-in lockfile/generated filters) |
 

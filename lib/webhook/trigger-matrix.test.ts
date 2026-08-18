@@ -28,7 +28,6 @@ const repo = {
     model: null,
     reviewProfile: "chill" as const,
     autoVerdict: true,
-    confidenceThreshold: 0.6,
     customGuidelines: "",
     ignorePatterns: [],
     contextFiles: [],

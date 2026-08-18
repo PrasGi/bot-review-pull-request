@@ -13,7 +13,6 @@ function config(overrides: Partial<RepoConfig> = {}): RepoConfig {
     model: null,
     reviewProfile: "normal",
     autoVerdict: true,
-    confidenceThreshold: 0.6,
     customGuidelines: "",
     ignorePatterns: [],
     contextFiles: [],

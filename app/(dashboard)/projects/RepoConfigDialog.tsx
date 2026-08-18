@@ -28,7 +28,6 @@ export type RepoConfig = {
   reviewProfile: 'chill' | 'normal' | 'professional' | 'expert';
   authorProfiles?: AuthorProfileRule[];
   autoVerdict: boolean;
-  confidenceThreshold: number;
   customGuidelines: string;
   ignorePatterns: string[];
   contextFiles: string[];
@@ -50,7 +49,6 @@ type FormState = {
   reviewProfile: ReviewProfile;
   authorProfiles: AuthorProfileRow[];
   autoVerdict: boolean;
-  confidenceThreshold: number;
   customGuidelines: string;
   ignorePatternsText: string;
   contextFilesText: string;
@@ -117,7 +115,6 @@ function configToForm(config: RepoConfig): FormState {
       makeAuthorRow(r.login, r.profile)
     ),
     autoVerdict: config.autoVerdict,
-    confidenceThreshold: config.confidenceThreshold,
     customGuidelines: config.customGuidelines,
     ignorePatternsText: (config.ignorePatterns ?? []).join('\n'),
     contextFilesText: (config.contextFiles ?? []).join('\n'),
@@ -151,8 +148,6 @@ function validateForm(form: FormState): string | null {
 
   if (form.customGuidelines.length > 2000)
     return 'Custom guidelines must be at most 2000 characters';
-  if (form.confidenceThreshold < 0.3 || form.confidenceThreshold > 0.9)
-    return 'Confidence threshold must be between 0.30 and 0.90';
   if (form.maxChunks < MIN_CHUNKS || form.maxChunks > MAX_CHUNKS)
     return `Max chunks must be between ${MIN_CHUNKS} and ${MAX_CHUNKS}`;
 
@@ -182,7 +177,6 @@ function formToConfig(form: FormState): Partial<RepoConfig> {
     reviewProfile: form.reviewProfile,
     authorProfiles,
     autoVerdict: form.autoVerdict,
-    confidenceThreshold: form.confidenceThreshold,
     customGuidelines: form.customGuidelines,
     ignorePatterns,
     contextFiles,
@@ -357,30 +351,6 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
         onCheckedChange={(checked) => set('autoVerdict', checked)}
         disabled={saving}
       />
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[var(--text)]">Confidence Threshold</span>
-          <span className="text-sm tabular-nums text-[var(--accent)] font-medium">
-            {form.confidenceThreshold.toFixed(2)}
-          </span>
-        </div>
-        <Slider
-          min={0.3}
-          max={0.9}
-          step={0.05}
-          value={[form.confidenceThreshold]}
-          onValueChange={([v]) => {
-            if (v !== undefined) set('confidenceThreshold', v);
-          }}
-          disabled={saving}
-          aria-label="Confidence threshold"
-        />
-        <div className="flex justify-between text-xs text-[var(--text-muted)]">
-          <span>0.30 — lenient</span>
-          <span>0.90 — strict</span>
-        </div>
-      </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">

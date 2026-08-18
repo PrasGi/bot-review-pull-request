@@ -17,23 +17,38 @@ describe("loginSchema", () => {
 });
 
 describe("repoConfigSchema", () => {
-  it("rejects an out-of-range confidence threshold", () => {
-    const base = {
-      provider: null,
-      model: null,
-      reviewProfile: "normal",
-      autoVerdict: true,
-      confidenceThreshold: 1.5,
-      customGuidelines: "",
-      ignorePatterns: [],
-      contextFiles: [],
-      maxChunks: 3,
-    };
-    expect(repoConfigSchema.safeParse(base).success).toBe(false);
+  const valid = {
+    provider: null,
+    model: null,
+    reviewProfile: "normal",
+    authorProfiles: [],
+    autoVerdict: true,
+    customGuidelines: "",
+    ignorePatterns: [],
+    contextFiles: [],
+    maxChunks: 3,
+  };
+
+  it("accepts a complete config", () => {
+    expect(repoConfigSchema.safeParse(valid).success).toBe(true);
   });
+
+  it("rejects maxChunks above the pipeline cap", () => {
+    expect(repoConfigSchema.safeParse({ ...valid, maxChunks: 85 }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects maxChunks below one", () => {
+    expect(repoConfigSchema.safeParse({ ...valid, maxChunks: 0 }).success).toBe(
+      false,
+    );
+  });
+
   it("rejects an invalid review profile", () => {
-    const r = repoConfigSchema.safeParse({ reviewProfile: "godmode" });
-    expect(r.success).toBe(false);
+    expect(
+      repoConfigSchema.safeParse({ ...valid, reviewProfile: "godmode" }).success,
+    ).toBe(false);
   });
 });
 

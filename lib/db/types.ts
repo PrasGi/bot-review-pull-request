@@ -83,7 +83,6 @@ export interface RepoConfig {
   reviewProfile: ReviewProfile;
   authorProfiles?: AuthorProfileRule[];
   autoVerdict: boolean;
-  confidenceThreshold: number;
   customGuidelines: string;
   ignorePatterns: string[];
   contextFiles: string[];
@@ -183,7 +182,6 @@ export interface IntentMatch {
 }
 
 export type VerdictForcedReason =
-  | "low_confidence"
   | "auto_verdict_off"
   | "critical_findings"
   | "intent_mismatch";

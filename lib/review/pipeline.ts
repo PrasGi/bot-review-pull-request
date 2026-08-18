@@ -47,7 +47,10 @@ import {
   buildMessages,
   type PreviousFindingLine,
 } from "@/lib/review/prompt";
-import { chunkReviewSchema } from "@/lib/review/schemas";
+import {
+  chunkReviewSchema,
+  describeChunkSalvage,
+} from "@/lib/review/schemas";
 import type {
   ChunkReviewOutput,
   FindingOutput,
@@ -304,9 +307,15 @@ async function runReplyReview(params: {
   };
 }
 
-function parseChunkOutput(raw: string): ChunkReviewOutput {
+interface ParsedChunk {
+  output: ChunkReviewOutput;
+  salvageNotes: string[];
+}
+
+function parseChunkOutput(raw: string): ParsedChunk {
   const json: unknown = JSON.parse(raw);
-  return chunkReviewSchema.parse(json);
+  const output = chunkReviewSchema.parse(json);
+  return { output, salvageNotes: describeChunkSalvage(json, output) };
 }
 
 export interface PipelineResult {
@@ -541,13 +550,19 @@ export async function runReviewPipeline(
     const latencyMs = Date.now() - started;
     const cost = computeCostUsd(completion.usage, pricing);
 
-    let output: ReturnType<typeof parseChunkOutput> | null = null;
+    let parsed: ParsedChunk | null = null;
     let parseError: string | undefined;
     try {
-      output = parseChunkOutput(completion.text);
+      parsed = parseChunkOutput(completion.text);
     } catch (error) {
       parseError = error instanceof Error ? error.message : "parse error";
     }
+
+    // A salvaged chunk still counts as a successful call, so the note rides
+    // along on an "ok" row rather than turning into a failure.
+    const salvageNote = parsed?.salvageNotes.length
+      ? `salvaged: ${parsed.salvageNotes.join("; ")}`
+      : undefined;
 
     await recordAiCall({
       requestId: request._id,
@@ -562,12 +577,12 @@ export async function runReviewPipeline(
       usage: completion.usage,
       costUsd: cost,
       latencyMs,
-      status: output ? "ok" : "error",
-      errorMessage: parseError,
+      status: parsed ? "ok" : "error",
+      errorMessage: parseError ?? salvageNote,
     });
 
-    if (!output) throw new Error(`chunk ${index + 1}: ${parseError}`);
-    return output;
+    if (!parsed) throw new Error(`chunk ${index + 1}: ${parseError}`);
+    return parsed;
   };
 
   const settled = await mapWithConcurrency(chunks, CONCURRENCY_LIMIT, runChunk);
@@ -588,7 +603,7 @@ export async function runReviewPipeline(
   if (succeeded.length < chunks.length) partialCoverage = true;
 
   for (const s of succeeded) {
-    const output = s.value;
+    const output = s.value.output;
     allFindings.push(...output.findings);
     if (output.confidence !== undefined) confidence = output.confidence;
     if (output.intentMatch) intentMatch = output.intentMatch;

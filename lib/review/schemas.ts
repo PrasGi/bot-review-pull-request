@@ -34,30 +34,88 @@ export const findingSchema = z.object({
 
 export const intentMatchSchema = z.object({
   status: z.enum(["match", "partial", "mismatch"]),
-  explanation: cappedString(400),
+  // Models routinely send {"status":"match"} with no explanation. The parent
+  // being .optional() does not make this optional, so a missing string here
+  // used to reject the whole chunk and fail the entire review.
+  explanation: cappedString(400).default(""),
 });
 
 // Drop malformed findings (missing path, non-positive line, etc.) instead of
 // failing the whole review — a general remark with no location is not fatal.
+// But losing EVERY finding is not leniency, it is a silent review: the model
+// reported problems and we would forward "no issues" to the verdict step,
+// which reads that as APPROVE. An originally empty array is a real clean PR
+// and stays valid; only all-dropped is fatal.
 const lenientFindings = z
   .array(z.unknown())
-  .transform((items) =>
-    items
+  .transform((items, ctx) => {
+    const kept = items
       .map((item) => findingSchema.safeParse(item))
       .filter((r) => r.success)
-      .map((r) => r.data),
-  );
+      .map((r) => r.data);
+    if (items.length > 0 && kept.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: `all ${items.length} findings were malformed`,
+      });
+      return z.NEVER;
+    }
+    return kept;
+  });
 
+// `findings` stays required and must be an array: it is the proof that the
+// model actually produced a review. Salvaging a response without it would turn
+// an unparseable answer into "zero findings", which the verdict step reads as
+// APPROVE — a silent false approval is far worse than a visible failure.
+// Every other field here is descriptive, so a malformed one is dropped rather
+// than allowed to reject the chunk.
 export const chunkReviewSchema = z.object({
   findings: lenientFindings,
-  chunkSummary: cappedString(600),
-  intentNotes: cappedString(300).optional(),
-  summary: cappedString(400).optional(),
-  verdict: z.enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"]).optional(),
-  confidence: confidenceSchema.optional(),
-  verdictReason: cappedString(400).optional(),
-  intentMatch: intentMatchSchema.optional(),
+  chunkSummary: cappedString(600).default("").catch(""),
+  intentNotes: cappedString(300).optional().catch(undefined),
+  summary: cappedString(400).optional().catch(undefined),
+  verdict: z
+    .enum(["APPROVE", "REQUEST_CHANGES", "COMMENT"])
+    .optional()
+    .catch(undefined),
+  confidence: confidenceSchema.optional().catch(undefined),
+  verdictReason: cappedString(400).optional().catch(undefined),
+  intentMatch: intentMatchSchema.optional().catch(undefined),
 });
+
+const SALVAGEABLE_KEYS = [
+  "intentNotes",
+  "summary",
+  "verdict",
+  "confidence",
+  "verdictReason",
+  "intentMatch",
+] as const;
+
+// Salvaging keeps reviews alive but makes the damage invisible: the parse now
+// succeeds, so the audit row reads "ok" and nobody notices a model that has
+// started emitting malformed fields on every call. This reports what was
+// quietly discarded so it can be recorded alongside the successful call.
+export function describeChunkSalvage(
+  raw: unknown,
+  output: ChunkReviewOutput,
+): string[] {
+  if (typeof raw !== "object" || raw === null) return [];
+  const json = raw as Record<string, unknown>;
+
+  const notes = SALVAGEABLE_KEYS.filter(
+    (key) => key in json && output[key] === undefined,
+  ).map((key) => `dropped malformed "${key}"`);
+
+  const rawFindings = json.findings;
+  if (Array.isArray(rawFindings) && rawFindings.length > output.findings.length) {
+    notes.push(
+      `dropped ${rawFindings.length - output.findings.length} of ${rawFindings.length} findings`,
+    );
+  }
+
+  return notes;
+}
 
 export const verdictSchema = z.object({
   summary: cappedString(1200),

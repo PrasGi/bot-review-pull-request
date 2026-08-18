@@ -30,7 +30,6 @@ export const repoConfigSchema = z.object({
   reviewProfile: reviewProfileSchema,
   authorProfiles: z.array(authorProfileRuleSchema).max(50),
   autoVerdict: z.boolean(),
-  confidenceThreshold: z.number().min(0.3).max(0.9),
   customGuidelines: z.string().max(2000),
   ignorePatterns: z.array(z.string().max(200)).max(50),
   contextFiles: z.array(z.string().max(300)).max(20),
