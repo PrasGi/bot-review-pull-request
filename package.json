@@ -12,7 +12,8 @@
     "seed": "tsx --tsconfig tsconfig.json scripts/seed.ts",
     "connect": "tsx --tsconfig tsconfig.json scripts/connect.ts",
     "set-profile": "tsx --tsconfig tsconfig.json scripts/set-profile.ts",
-    "set-model": "tsx --tsconfig tsconfig.json scripts/set-model.ts"
+    "set-model": "tsx --tsconfig tsconfig.json scripts/set-model.ts",
+    "set-chunks": "tsx --tsconfig tsconfig.json scripts/set-chunks.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

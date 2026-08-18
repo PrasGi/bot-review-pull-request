@@ -27,7 +27,7 @@ export function defaultRepoConfig(): RepoConfig {
     customGuidelines: "",
     ignorePatterns: [],
     contextFiles: [],
-    maxChunks: 8,
+    maxChunks: 84,
   };
 }
 
