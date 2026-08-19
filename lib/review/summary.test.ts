@@ -102,4 +102,46 @@ describe("buildReviewBody", () => {
     expect(body).toContain("Adds retry handling to the webhook dispatcher.");
     expect(body).toContain("Retries are bounded and the backoff is deterministic.");
   });
+
+  it("folds non-blocking findings into one collapsible section", () => {
+    const body = buildReviewBody({
+      verdict: "COMMENT",
+      summary: "Looks fine overall.",
+      nonBlockingFindings: [
+        {
+          path: "src/a.ts",
+          line: 10,
+          severity: "nit",
+          comment: "Prefer const over let here.",
+        },
+        {
+          path: "src/b.ts",
+          line: 20,
+          severity: "minor",
+          comment: "This could be memoized.",
+          suggestion: "const x = useMemo(() => compute(), [dep]);",
+        },
+      ],
+      newerCommits: false,
+      shortSha: "abc1234",
+    });
+
+    expect(body).toContain("<details>");
+    expect(body).toContain("<summary>Other notes (2)</summary>");
+    expect(body).toContain("`src/a.ts:10` **nit** — Prefer const over let here.");
+    expect(body).toContain("`src/b.ts:20` **minor** — This could be memoized.");
+    expect(body).toContain("const x = useMemo(() => compute(), [dep]);");
+  });
+
+  it("omits the non-blocking section when there are no non-blocking findings", () => {
+    const body = buildReviewBody({
+      verdict: "APPROVE",
+      summary: "All good.",
+      newerCommits: false,
+      shortSha: "abc1234",
+    });
+
+    expect(body).not.toContain("<details>");
+    expect(body).not.toContain("Other notes");
+  });
 });

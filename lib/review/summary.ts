@@ -1,4 +1,4 @@
-import type { Verdict } from "@/lib/db/types";
+import type { FindingSeverity, Verdict } from "@/lib/db/types";
 
 const VERDICT_BANNER: Record<Verdict, string> = {
   APPROVE: "Approved ✅",
@@ -67,12 +67,46 @@ export interface PartialReviewInfo {
   skippedFiles: string[];
 }
 
+// Non-blocking findings (nits, style, "please double-check" items) get folded
+// into one collapsible section instead of their own inline thread — the
+// individual-comment treatment is reserved for findings that actually need
+// changes. This also means they lose per-finding resolved/unresolved tracking
+// on re-review (there's no inline comment to anchor a reply to), which is an
+// acceptable trade for not burying the PR in single-line comments.
+export interface NonBlockingFinding {
+  path: string;
+  line: number;
+  severity: FindingSeverity;
+  comment: string;
+  suggestion?: string;
+}
+
+function renderNonBlockingSection(findings: NonBlockingFinding[]): string[] {
+  if (findings.length === 0) return [];
+  const items = findings.map((f) => {
+    const suggestion = f.suggestion
+      ? `\n\n  \`\`\`\n  ${f.suggestion}\n  \`\`\``
+      : "";
+    return `- \`${f.path}:${f.line}\` **${f.severity}** — ${f.comment}${suggestion}`;
+  });
+  return [
+    "",
+    "<details>",
+    `<summary>Other notes (${findings.length})</summary>`,
+    "",
+    items.join("\n"),
+    "",
+    "</details>",
+  ];
+}
+
 export interface SummaryInput {
   verdict: Verdict;
   summary: string;
   caveat?: string;
   partial?: PartialReviewInfo;
   incomplete?: IncompleteReason | undefined;
+  nonBlockingFindings?: NonBlockingFinding[];
   newerCommits: boolean;
   shortSha: string;
 }
@@ -117,6 +151,8 @@ export function buildReviewBody(input: SummaryInput): string {
       `> ⚠️ New commits were pushed after \`${input.shortSha}\`. Re-request review to cover them.`,
     );
   }
+
+  parts.push(...renderNonBlockingSection(input.nonBlockingFindings ?? []));
 
   return parts.join("\n");
 }

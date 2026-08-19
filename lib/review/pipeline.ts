@@ -693,17 +693,25 @@ export async function runReviewPipeline(
         }
       : undefined;
 
+  // Blocking findings each get their own inline thread — they need changes,
+  // so they need to be individually addressable and trackable on re-review.
+  // Non-blocking findings (nits, style) are folded into one collapsible
+  // section in the body instead of piling up as separate comments.
+  const blockingFindings = findingsOut.filter((f) => f.blocking);
+  const nonBlockingFindings = findingsOut.filter((f) => !f.blocking);
+
   const body = buildReviewBody({
     verdict,
     summary: summaryText,
     caveat: resolution.caveat,
     ...(partial ? { partial } : {}),
     ...(incomplete ? { incomplete } : {}),
+    ...(nonBlockingFindings.length > 0 ? { nonBlockingFindings } : {}),
     newerCommits: request.newerCommitsFlag ?? false,
     shortSha: pr.headSha.slice(0, 7),
   });
 
-  const inlineComments: InlineComment[] = findingsOut.map((f) => ({
+  const inlineComments: InlineComment[] = blockingFindings.map((f) => ({
     path: f.path,
     line: f.line,
     ...(f.endLine && f.endLine > f.line ? { start_line: f.line, line: f.endLine } : {}),
@@ -723,7 +731,7 @@ export async function runReviewPipeline(
   });
 
   if (!submitResult.inlinePosted) {
-    for (const f of findingsOut) f.posted = false;
+    for (const f of blockingFindings) f.posted = false;
   }
 
   return persistReview({
