@@ -89,6 +89,26 @@ describe("chunkReviewSchema", () => {
     expect(parsed.findings[0]?.path).toBe("src/a.ts");
   });
 
+  it("recovers a finding whose comment was sent as \"breakdown\"", () => {
+    const parsed = chunkReviewSchema.parse(
+      response({
+        findings: [
+          {
+            path: "src/a.ts",
+            line: 10,
+            severity: "major",
+            category: "bug",
+            breakdown: "off by one",
+            blocking: true,
+          },
+        ],
+      }),
+    );
+
+    expect(parsed.findings).toHaveLength(1);
+    expect(parsed.findings[0]?.comment).toBe("off by one");
+  });
+
   // A response with no findings array is not a review the model actually
   // produced. Defaulting it to [] would read as "nothing wrong" and let the
   // verdict step post a false APPROVE, so it must stay fatal.

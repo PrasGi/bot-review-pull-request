@@ -40,6 +40,20 @@ export const intentMatchSchema = z.object({
   explanation: cappedString(400).default(""),
 });
 
+// Models occasionally rename "comment" to a near-synonym (seen from GLM:
+// "breakdown"). Recover it before validation instead of dropping the whole
+// finding for a naming slip.
+const COMMENT_ALIASES = ["breakdown"] as const;
+
+function withCommentAlias(item: unknown): unknown {
+  if (typeof item !== "object" || item === null || "comment" in item) {
+    return item;
+  }
+  const record = item as Record<string, unknown>;
+  const alias = COMMENT_ALIASES.find((key) => typeof record[key] === "string");
+  return alias ? { ...record, comment: record[alias] } : item;
+}
+
 // Drop malformed findings (missing path, non-positive line, etc.) instead of
 // failing the whole review — a general remark with no location is not fatal.
 // But losing EVERY finding is not leniency, it is a silent review: the model
@@ -50,7 +64,7 @@ const lenientFindings = z
   .array(z.unknown())
   .transform((items, ctx) => {
     const kept = items
-      .map((item) => findingSchema.safeParse(item))
+      .map((item) => findingSchema.safeParse(withCommentAlias(item)))
       .filter((r) => r.success)
       .map((r) => r.data);
     if (items.length > 0 && kept.length === 0) {
