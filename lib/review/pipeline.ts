@@ -86,14 +86,19 @@ const CHUNK_TOKENS = 12_000;
 const TOTAL_INPUT_BUDGET_TOKENS = 1_000_000;
 const MAX_CHUNKS = 84;
 const CONCURRENCY_LIMIT = 4;
-const CALL_TIMEOUT_MS = 240_000;
+// GLM latency is bursty: successful chunk calls measured over 72h sat at p50
+// 126s / p95 216s / max 231s, so a 240s cap cut off the tail and turned slow
+// calls into dropped chunks. 600s keeps the tail; a call that blows even this
+// is a provider stall (zero tokens returned), not a slow answer.
+const CALL_TIMEOUT_MS = 600_000;
 const MAX_TOKENS_CHUNK = 16_384;
 
 // Measured from pipeline start. RETRY stops new attempts early enough that a
-// retry can still finish and be aggregated; GLOBAL reserves the remainder for
-// submitting the review. A review that says "I ran out of time" always beats
-// one that never gets posted.
-const RETRY_DEADLINE_MS = 1_500_000;
+// retry can still finish and be aggregated, so it must stay at or below
+// GLOBAL - CALL_TIMEOUT; GLOBAL reserves the remainder for submitting the
+// review. A review that says "I ran out of time" always beats one that never
+// gets posted.
+const RETRY_DEADLINE_MS = 1_200_000;
 const GLOBAL_DEADLINE_MS = 1_800_000;
 
 function splitRepo(fullName: string): { owner: string; repo: string } {

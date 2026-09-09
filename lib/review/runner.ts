@@ -5,6 +5,12 @@ import { runReviewPipeline } from "@/lib/review/pipeline";
 import { PrClosedError } from "@/lib/review/errors";
 import { log, errorFields } from "@/lib/logger";
 
+// The pipeline only heartbeats between stages, and a chunk wave can now hold it
+// for CALL_TIMEOUT_MS (plus one retry) with no natural beat in between — far
+// past the reaper's 5-minute stale cutoff, which would fail a review that is
+// still running. Ticking on a timer keeps the heartbeat a liveness signal.
+const HEARTBEAT_INTERVAL_MS = 60_000;
+
 async function claim(requestId: ObjectId): Promise<ReviewRequestDoc | null> {
   const requests = await reviewRequestsCollection();
   const now = new Date();
@@ -73,6 +79,12 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
     );
   };
 
+  const ticker = setInterval(() => {
+    // A missed beat is survivable; an unhandled rejection here is not.
+    void heartbeat().catch(() => {});
+  }, HEARTBEAT_INTERVAL_MS);
+  ticker.unref();
+
   try {
     await runReviewPipeline(request, heartbeat);
     await markCompleted(requestId);
@@ -97,5 +109,7 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
       durationMs: Date.now() - startedAt,
       ...errorFields(error),
     });
+  } finally {
+    clearInterval(ticker);
   }
 }
