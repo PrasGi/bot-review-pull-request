@@ -73,6 +73,7 @@ import {
 } from "@/lib/review/summary";
 import { recordAiCall } from "@/lib/review/audit";
 import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
+import { hasPullRequestMetadataChanged } from "@/lib/review/metadata";
 
 // Budget: 96k input tokens per PR (12k x 8 chunks) so almost every PR gets FULL
 // coverage; small PRs only spend what their diff needs. Smaller chunks are what
@@ -128,8 +129,10 @@ async function resolveReviewScope(params: {
   owner: string;
   repoName: string;
   headSha: string;
+  prTitle: string;
+  prBody: string | null;
 }): Promise<ReviewScope> {
-  const { request, token, owner, repoName, headSha } = params;
+  const { request, token, owner, repoName, headSha, prTitle, prBody } = params;
 
   const full = async (
     kind: ReviewDocKind,
@@ -150,6 +153,10 @@ async function resolveReviewScope(params: {
   );
   if (!prev || !prev.lastReviewedSha) return full("re_review_fallback_full", null);
   if (prev.lastReviewedSha === headSha) {
+    if (hasPullRequestMetadataChanged(prev, { title: prTitle, body: prBody })) {
+      return full("re_review", prev);
+    }
+
     return {
       files: [],
       kind: "re_review",
@@ -362,6 +369,8 @@ export async function runReviewPipeline(
     owner,
     repoName,
     headSha: pr.headSha,
+    prTitle: pr.title,
+    prBody: pr.body,
   });
 
   const { kept } = filterFiles(delta.files, repo.config.ignorePatterns);
@@ -404,6 +413,8 @@ export async function runReviewPipeline(
             summary: replyOutcome.summary,
             intentMatch: delta.previousReview.intentMatch,
             findings: [],
+            prTitle: pr.title,
+            prBody: pr.body,
             headSha: pr.headSha,
             githubReviewId: replyOutcome.githubReviewId,
             reviewKind: "re_review_reply",
@@ -420,6 +431,8 @@ export async function runReviewPipeline(
         summary: "No reviewable code changes since the last review.",
         intentMatch: { status: "match", explanation: "" },
         findings: [],
+        prTitle: pr.title,
+        prBody: pr.body,
         headSha: pr.headSha,
         reviewKind: delta.kind,
         previousReviewId: delta.previousReview?._id,
@@ -448,6 +461,8 @@ export async function runReviewPipeline(
       summary: "Nothing reviewable.",
       intentMatch: { status: "match", explanation: "No reviewable code." },
       findings: [],
+      prTitle: pr.title,
+      prBody: pr.body,
       headSha: pr.headSha,
       reviewKind: delta.kind,
       githubReviewId: result.githubReviewId,
@@ -748,6 +763,8 @@ export async function runReviewPipeline(
     summary: summaryText,
     intentMatch: finalIntent,
     findings: findingsOut,
+    prTitle: pr.title,
+    prBody: pr.body,
     headSha: pr.headSha,
     githubReviewId: submitResult.githubReviewId,
     reviewKind: delta.kind,
@@ -764,6 +781,8 @@ async function persistReview(params: {
   summary: string;
   intentMatch: IntentMatch;
   findings: Finding[];
+  prTitle: string;
+  prBody: string | null;
   headSha: string;
   githubReviewId?: number;
   reviewKind?: ReviewDocKind;
@@ -779,6 +798,8 @@ async function persistReview(params: {
     requestId: params.request._id,
     repoId: params.repoId,
     prNumber: params.request.prNumber,
+    prTitle: params.prTitle,
+    prBody: params.prBody,
     verdict: params.verdict,
     ...(params.verdictForced ? { verdictForced: params.verdictForced } : {}),
     confidence: params.confidence ?? 1,

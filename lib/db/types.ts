@@ -197,6 +197,9 @@ export interface ReviewDoc {
   requestId: ObjectId;
   repoId: ObjectId;
   prNumber: number;
+  /** Metadata evaluated by this review. Optional for legacy documents. */
+  prTitle?: string;
+  prBody?: string | null;
   verdict: Verdict;
   verdictForced?: VerdictForcedReason;
   confidence: number;
