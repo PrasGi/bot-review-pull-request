@@ -47,15 +47,12 @@ import {
   buildMessages,
   type PreviousFindingLine,
 } from "@/lib/review/prompt";
-import {
-  chunkReviewSchema,
-  describeChunkSalvage,
-} from "@/lib/review/schemas";
 import type {
-  ChunkReviewOutput,
   FindingOutput,
   IntentMatchOutput,
 } from "@/lib/review/schemas";
+import { completeChunkWithRepair } from "@/lib/review/chunk-completion";
+import type { ParsedChunk } from "@/lib/review/chunk-completion";
 import {
   enforceKnobs,
   filterFindingsToValidLines,
@@ -319,17 +316,6 @@ async function runReplyReview(params: {
   };
 }
 
-interface ParsedChunk {
-  output: ChunkReviewOutput;
-  salvageNotes: string[];
-}
-
-function parseChunkOutput(raw: string): ParsedChunk {
-  const json: unknown = JSON.parse(raw);
-  const output = chunkReviewSchema.parse(json);
-  return { output, salvageNotes: describeChunkSalvage(json, output) };
-}
-
 export interface PipelineResult {
   verdict: Verdict;
   reviewId: ObjectId;
@@ -503,7 +489,7 @@ export async function runReviewPipeline(
   const runChunk = async (
     chunk: (typeof chunks)[number],
     index: number,
-  ): Promise<ReturnType<typeof parseChunkOutput> | null> => {
+  ): Promise<ParsedChunk | null> => {
     if (!chunk) return null;
     if (Date.now() - pipelineStart > GLOBAL_DEADLINE_MS) {
       deadlineHit = true;
@@ -532,84 +518,53 @@ export async function runReviewPipeline(
     });
     const messages = buildMessages(systemPrompt, userPrompt);
 
-    const started = Date.now();
-    const auditPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
-    let completion: import("@/lib/ai/provider").AICompletion;
     try {
-      completion = await instance.complete({
-        model,
-        messages,
-        maxTokens: MAX_TOKENS_CHUNK,
-        timeoutMs: CALL_TIMEOUT_MS,
-        // Reasoning stays ON: with it disabled the model missed a planted
-        // open-redirect and emitted line numbers that our hunk filter drops.
-        thinking: "enabled",
-        retryDeadlineAt: pipelineStart + RETRY_DEADLINE_MS,
+      return await completeChunkWithRepair({
+        provider: instance,
+        completionParams: {
+          model,
+          messages,
+          maxTokens: MAX_TOKENS_CHUNK,
+          timeoutMs: CALL_TIMEOUT_MS,
+          // Reasoning stays on for the review; repair only fixes formatting.
+          thinking: "enabled",
+          retryDeadlineAt: pipelineStart + RETRY_DEADLINE_MS,
+        },
+        repairDeadlineAt: pipelineStart + RETRY_DEADLINE_MS,
+        audit: async (attempt) => {
+          await recordAiCall({
+            requestId: request._id,
+            repoId: repo._id,
+            userConnectionId: reviewer._id,
+            provider,
+            model,
+            purpose: attempt.purpose,
+            templateVersion: TEMPLATE_VERSION,
+            prompt: attempt.messages
+              .map((message) => `[${message.role}]\n${message.content}`)
+              .join("\n\n---\n\n"),
+            response: attempt.response,
+            usage: attempt.usage,
+            costUsd: computeCostUsd(attempt.usage, pricing),
+            latencyMs: attempt.latencyMs,
+            status: attempt.status,
+            errorMessage: attempt.errorMessage,
+          });
+        },
       });
     } catch (error) {
-      // Without this the throw escapes before recordAiCall below and the chunk
-      // vanishes with no trace at all, leaving the failure undiagnosable.
-      await recordAiCall({
-        requestId: request._id,
-        repoId: repo._id,
-        userConnectionId: reviewer._id,
-        provider,
-        model,
-        purpose: "chunk-review",
-        templateVersion: TEMPLATE_VERSION,
-        prompt: auditPrompt,
-        response: "",
-        usage: { promptTokens: 0, completionTokens: 0 },
-        costUsd: 0,
-        latencyMs: Date.now() - started,
-        status: "error",
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+      throw new Error(
+        `chunk ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
     }
-    const latencyMs = Date.now() - started;
-    const cost = computeCostUsd(completion.usage, pricing);
-
-    let parsed: ParsedChunk | null = null;
-    let parseError: string | undefined;
-    try {
-      parsed = parseChunkOutput(completion.text);
-    } catch (error) {
-      parseError = error instanceof Error ? error.message : "parse error";
-    }
-
-    // A salvaged chunk still counts as a successful call, so the note rides
-    // along on an "ok" row rather than turning into a failure.
-    const salvageNote = parsed?.salvageNotes.length
-      ? `salvaged: ${parsed.salvageNotes.join("; ")}`
-      : undefined;
-
-    await recordAiCall({
-      requestId: request._id,
-      repoId: repo._id,
-      userConnectionId: reviewer._id,
-      provider,
-      model,
-      purpose: "chunk-review",
-      templateVersion: TEMPLATE_VERSION,
-      prompt: `${systemPrompt}\n\n---\n\n${userPrompt}`,
-      response: completion.text,
-      usage: completion.usage,
-      costUsd: cost,
-      latencyMs,
-      status: parsed ? "ok" : "error",
-      errorMessage: parseError ?? salvageNote,
-    });
-
-    if (!parsed) throw new Error(`chunk ${index + 1}: ${parseError}`);
-    return parsed;
   };
 
   const settled = await mapWithConcurrency(chunks, CONCURRENCY_LIMIT, runChunk);
   await heartbeat();
 
   const succeeded = settled.filter(
-    (s): s is PromiseFulfilledResult<ReturnType<typeof parseChunkOutput>> =>
+    (s): s is PromiseFulfilledResult<ParsedChunk> =>
       s.status === "fulfilled" && s.value !== null,
   );
   if (succeeded.length === 0) {

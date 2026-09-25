@@ -25,7 +25,7 @@ const FINDING_SHAPE = `{ "path": string, "line": number, "endLine"?: number,
       "comment": string, "suggestion"?: string, "blocking": boolean }`;
 
 const OUTPUT_SCHEMA_SINGLE = `
-OUTPUT JSON SHAPE (return exactly this object, no markdown fences):
+OUTPUT FIELDS (the types below describe values; return valid JSON, no markdown fences):
 {
   "findings": [ ${FINDING_SHAPE} ],
   "chunkSummary": string,
@@ -35,15 +35,17 @@ OUTPUT JSON SHAPE (return exactly this object, no markdown fences):
   "verdictReason": string,
   "intentMatch": { "status": "match"|"partial"|"mismatch", "explanation": string }
 }
+Escape double quotes and backslashes inside every JSON string, including code suggestions. Do not emit trailing commas.
 ${BLOCKING_RULE}`;
 
 const OUTPUT_SCHEMA_CHUNK = `
-OUTPUT JSON SHAPE (return exactly this object, no markdown fences):
+OUTPUT FIELDS (the types below describe values; return valid JSON, no markdown fences):
 {
   "findings": [ ${FINDING_SHAPE} ],
   "chunkSummary": string,
   "intentNotes"?: string
 }
+Escape double quotes and backslashes inside every JSON string, including code suggestions. Do not emit trailing commas.
 ${BLOCKING_RULE}`;
 
 const SCOPE_DISCIPLINE = `
