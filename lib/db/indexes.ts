@@ -31,7 +31,12 @@ export async function ensureIndexes(): Promise<void> {
   ]);
 
   const repos = await reposCollection();
-  const repoIndexes = await repos.indexes();
+  // listIndexes fails with NamespaceNotFound (code 26) on a fresh database where
+  // the collection does not exist yet; treat that as "no indexes".
+  const repoIndexes = await repos.indexes().catch((error: unknown) => {
+    if ((error as { code?: number }).code === 26) return [];
+    throw error;
+  });
   if (repoIndexes.some((idx) => idx.name === "fullName_unique")) {
     await repos.dropIndex("fullName_unique");
   }
