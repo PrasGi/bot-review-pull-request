@@ -1,10 +1,14 @@
 # .github/workflows/ci-cd.yml
 # CI on every PR and push; deploy to the VPS (server-pras-1) on push to main.
+# Based on server-pras-1/templates/github-deploy.yml.
 #
 # Deploy secrets come from `srv deploy-key personal/bot-review` on the server:
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SCOPE, DEPLOY_KNOWN_HOSTS, DEPLOY_SSH_KEY
 # Runtime env lives in /workspace/personal/bot-review/shared/.env on the server
 # (edit with `srv env edit personal/bot-review`); CI never writes it.
+#
+# A release is the whole checkout (source, node_modules with devDependencies, .next),
+# minus .git. rsync --link-dest hardlinks files unchanged since the active release.
 name: ci-cd
 
 on:
@@ -14,21 +18,24 @@ on:
   workflow_dispatch:
 
 concurrency:
+  # One deploy at a time on main; newer pushes to a PR cancel older checks.
   group: ci-cd-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
+  ci-cd:
     runs-on: ubuntu-24.04 # same OS/arch as the server, so native modules (argon2) match
-    timeout-minutes: 20
+    timeout-minutes: 25
+    env:
+      DEPLOY: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+      NEXT_TELEMETRY_DISABLED: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.23.0
+      # Version comes from package.json "packageManager".
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -36,51 +43,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm test
-
       # `next build` generates next-env.d.ts and route types, so typecheck runs after it.
       - run: pnpm build
-        env:
-          NEXT_TELEMETRY_DISABLED: 1
       - run: pnpm typecheck
 
-      # Standalone output: server.js + traced node_modules. Tar keeps pnpm's symlinks,
-      # which upload-artifact would otherwise flatten.
-      - name: Assemble release
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        run: |
-          rm -rf release
-          cp -a .next/standalone release
-          mkdir -p release/.next
-          cp -a .next/static release/.next/static
-          if [ -d public ]; then cp -a public release/public; fi
-          tar -czf release.tgz -C release .
-
-      - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        with:
-          name: release
-          path: release.tgz
-          retention-days: 3
-
-  deploy:
-    needs: check
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
-    environment:
-      name: production
-      url: https://bot-review.prasme.id
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: release
-
-      - run: mkdir release && tar -xzf release.tgz -C release
-
       - name: Upload and activate
+        if: env.DEPLOY == 'true'
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -93,10 +61,15 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           SSH="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes"
-          rsync -az --delete -e "$SSH" release/ \
+          # -rlpzc, not -a: fresh mtimes on every checkout would stop --link-dest from linking.
+          # --link-dest must be exactly ../../current/ (srv-ssh-gate enforces it).
+          rsync -rlpzc --delete --link-dest=../../current/ \
+            --exclude=.git --exclude=.env --exclude='.env.*' --exclude=.next/cache \
+            -e "$SSH" ./ \
             "$DEPLOY_USER@$DEPLOY_HOST:/workspace/$DEPLOY_SCOPE/releases/$GITHUB_SHA/"
-          # srv-deploy switches `current`, reloads PM2, health-checks /api/health and rolls back on failure.
+          # Switches `current`, reloads PM2, health-checks /api/health and rolls back on failure.
           $SSH "$DEPLOY_USER@$DEPLOY_HOST" srv-deploy "$GITHUB_SHA"
 
       - name: Public health check
+        if: env.DEPLOY == 'true'
         run: curl -fsS --retry 5 --retry-delay 5 --retry-all-errors https://bot-review.prasme.id/api/health

@@ -15,9 +15,21 @@ Server tooling and conventions: <https://github.com/PrasGi/server-pras-1>.
 `.github/workflows/ci-cd.yml`:
 
 - **Every PR and push**: `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm typecheck`.
-- **Push to `main`**: the build is packed as `releases/<sha>`, rsynced to the server, and
-  activated by `srv-deploy`, which reloads PM2, checks `/api/health`, and rolls back to the
-  previous release if the check fails.
+- **Push to `main`**: the whole checkout (source, `node_modules` with devDependencies, `.next`)
+  is rsynced to `releases/<sha>` and activated by `srv-deploy`, which reloads PM2 (`next start`),
+  checks `/api/health`, and rolls back to the previous release if the check fails.
+
+`rsync --link-dest` hardlinks files unchanged since the active release, so each release only uses
+disk for what changed. Because of that, **never edit files under `releases/`**: an edit leaks into
+every release that shares the file.
+
+Scripts can run on the server from the active release. They do not load `.env` on their own,
+so pass it (`current/.env` links to `shared/.env`):
+
+```bash
+sudo -u app-personal-bot-review -H bash -c \
+  'cd /workspace/personal/bot-review/current && pnpm exec tsx --env-file=.env --tsconfig tsconfig.json scripts/seed.ts'
+```
 
 Repository secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SCOPE`, `DEPLOY_KNOWN_HOSTS` and
 `DEPLOY_SSH_KEY` come from `srv deploy-key personal/bot-review` (run as root on the server;

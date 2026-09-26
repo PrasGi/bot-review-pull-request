@@ -2,10 +2,11 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  // pnpm-workspace.yaml makes Next.js infer a monorepo root and relocate the
-  // standalone output. Pinning the tracing root here keeps server.js at
-  // .next/standalone/server.js, which the VPS PM2 ecosystem (script: server.js) depends on.
+  // No `output: "standalone"`: the VPS runs `next start` from a full release
+  // (source + node_modules + .next). See docs/deploy.md.
+  //
+  // pnpm-workspace.yaml makes Next.js infer a monorepo root; pinning the
+  // tracing root keeps it at this directory.
   outputFileTracingRoot: path.join(__dirname),
 };
 
