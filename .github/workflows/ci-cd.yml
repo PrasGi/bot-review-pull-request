@@ -65,8 +65,10 @@ jobs:
           SSH="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes"
           # -rlpzc, not -a: fresh mtimes on every checkout would stop --link-dest from linking.
           # --link-dest must be exactly ../../current/ (srv-ssh-gate enforces it).
+          # /node_modules (leading slash) skips only the root one: .next/node_modules holds
+          # Turbopack's symlinks to external packages (e.g. mongodb-<hash>) and must ship.
           rsync -rlpzc --delete --link-dest=../../current/ \
-            --exclude=.git --exclude=.env --exclude='.env.*' --exclude=.next/cache --exclude=node_modules \
+            --exclude=.git --exclude=.env --exclude='.env.*' --exclude=.next/cache --exclude=/node_modules \
             -e "$SSH" ./ \
             "$DEPLOY_USER@$DEPLOY_HOST:/workspace/$DEPLOY_SCOPE/releases/$GITHUB_SHA/"
           # Switches `current`, reloads PM2, health-checks /api/health and rolls back on failure.
