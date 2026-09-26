@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // pnpm-workspace.yaml makes Next.js infer a monorepo root and relocate the
   // standalone output. Pinning the tracing root here keeps server.js at
-  // .next/standalone/server.js, which the Dockerfile CMD depends on.
+  // .next/standalone/server.js, which the VPS PM2 ecosystem (script: server.js) depends on.
   outputFileTracingRoot: path.join(__dirname),
 };
 

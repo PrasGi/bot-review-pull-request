@@ -222,6 +222,7 @@ pnpm set-model <model> [--clear-overrides]            # set the global default m
 
 ## 📚 More
 
+- **[`docs/deploy.md`](./docs/deploy.md)** — how this instance is deployed (VPS, GitHub Actions, PM2)
 - **[`docs/setup.md`](./docs/setup.md)** — full deployment runbook (MongoDB, Vercel, cron, org-approval flow)
 - **[`docs/scaling.md`](./docs/scaling.md)** — durability decisions & when to scale beyond Vercel Hobby
 - **`track-plans.md`** — the complete system design & architecture reference
