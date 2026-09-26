@@ -15,9 +15,14 @@ Server tooling and conventions: <https://github.com/PrasGi/server-pras-1>.
 `.github/workflows/ci-cd.yml`:
 
 - **Every PR and push**: `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm typecheck`.
-- **Push to `main`**: the whole checkout (source, `node_modules` with devDependencies, `.next`)
-  is rsynced to `releases/<sha>` and activated by `srv-deploy`, which reloads PM2 (`next start`),
-  checks `/api/health`, and rolls back to the previous release if the check fails.
+- **Push to `main`**: the checkout (source + `.next`, without `node_modules`) is rsynced to
+  `releases/<sha>`. `srv-deploy` then gets `node_modules` on the server (hardlinked from the
+  active release when `pnpm-lock.yaml` is unchanged, otherwise `pnpm install --frozen-lockfile`,
+  ~16 s), reloads PM2 (`next start`), checks `/api/health`, and rolls back to the previous
+  release if the check fails.
+
+`node_modules` is not uploaded because GitHub → Jakarta is slow (~270 KB/s); the server pulls
+from npm at ~34 MB/s.
 
 `rsync --link-dest` hardlinks files unchanged since the active release, so each release only uses
 disk for what changed. Because of that, **never edit files under `releases/`**: an edit leaks into
