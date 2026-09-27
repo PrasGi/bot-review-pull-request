@@ -21,8 +21,11 @@ import {
 } from "@/lib/review/progress";
 import { STAGE_LABEL, LIVE_COPY } from "@/lib/review/progress-copy";
 
-/** A focused request stays on screen this long after it finishes, so its result can show. */
-export const FINISHED_WINDOW_MS = 15_000;
+/**
+ * How long a finished focus is still returned. The client shows the result for
+ * 60 s; the margin covers a poll landing late.
+ */
+export const FINISHED_WINDOW_MS = 75_000;
 
 const ACTIVE: ReviewRequestStatus[] = ["processing", "queued"];
 const FINISHED: ReviewRequestStatus[] = ["completed", "failed", "cancelled", "skipped_draft", "superseded"];

@@ -16,9 +16,8 @@ import { fetcher, FetchError } from '@/lib/ui/swr';
 import { verdictTone } from '@/lib/ui/tones';
 import styles from './LiveReview.module.css';
 
-const RESULT_MS = 5_000;
-const ACTIVE_POLL_MS = 2_000;
-const IDLE_POLL_MS = 5_000;
+const RESULT_MS = 60_000;
+const POLL_MS = 2_000;
 const STEP_GLYPH = { done: '✓', current: '●', pending: '○' } as const;
 
 const isActive = (status: string): boolean => status === 'processing' || status === 'queued';
@@ -160,7 +159,7 @@ export function LiveReview(): React.ReactElement | null {
     'live-review',
     () => fetcher<LiveResponse>(`/api/dashboard/requests/live${focusRef.current ? `?focus=${focusRef.current}` : ''}`),
     {
-      refreshInterval: (latest) => (latest?.focus ? ACTIVE_POLL_MS : IDLE_POLL_MS),
+      refreshInterval: POLL_MS,
       onSuccess: (latest) => {
         const focus = latest.focus;
         if (!focus) {

@@ -93,6 +93,7 @@ const STATUS_OPTIONS = [
 ];
 
 const PAGE_SIZE = 20;
+const REFRESH_MS = 2_000;
 
 function isInFlight(status: string): boolean {
   return status === 'processing' || status === 'queued';
@@ -247,7 +248,7 @@ export default function RequestsPage(): React.ReactElement {
   const { data, error, isLoading } = useSWR<RequestListResult, FetchError>(
     apiUrl,
     fetcher,
-    { refreshInterval: 5000, keepPreviousData: true }
+    { refreshInterval: REFRESH_MS, keepPreviousData: true }
   );
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
@@ -257,7 +258,7 @@ export default function RequestsPage(): React.ReactElement {
       <PageHeader
         title="Review requests"
         description="All PR review requests across your repositories."
-        actions={<LiveIndicator ariaLabel="Auto-refreshing every 5 seconds" />}
+        actions={<LiveIndicator label="Live · updates every 2s" ariaLabel="Auto-refreshing every 2 seconds" />}
       />
 
       <LiveReview />
