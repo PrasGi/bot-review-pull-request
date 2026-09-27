@@ -8,6 +8,29 @@
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* The kit's visually hidden text and native inputs are position: absolute. Without a
+   positioned ancestor inside the scroll area they anchor to the document and stretch it,
+   leaving blank space below the fixed-height shell. */
+.prr-shell-content {
+  position: relative;
+}
+
+/* Square icon buttons the kit sizes but never resets: the browser's default button
+   padding shrinks their content box below the 16px icon and pushes it off-center. */
+.prr-collapse,
+.prr-icon-btn,
+.prr-toast-x {
+  padding: 0;
+}
+
+/* The collapsed sidebar's expand toggle overhangs the sidebar edge; lift the sidebar
+   above the sticky header (z-index 30) so the header doesn't cover it. Drawers and
+   dialogs (50+) still sit on top. */
+.prr-sidebar {
+  position: relative;
+  z-index: 40;
+}
+
 *,
 *::before,
 *::after {
