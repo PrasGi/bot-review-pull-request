@@ -15,6 +15,7 @@ import { LiveIndicator } from '@/components/layout/Status';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { Pagination } from '@/components/data/Pagination';
 import { requestStatusTone, verdictTone } from '@/lib/ui/tones';
+import { LiveReview } from './LiveReview';
 import styles from './page.module.css';
 
 type RequestListItem = {
@@ -258,6 +259,8 @@ export default function RequestsPage(): React.ReactElement {
         description="All PR review requests across your repositories."
         actions={<LiveIndicator ariaLabel="Auto-refreshing every 5 seconds" />}
       />
+
+      <LiveReview />
 
       <DataTable
         caption="Review requests"

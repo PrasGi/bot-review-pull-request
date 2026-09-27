@@ -1,0 +1,33 @@
+.track {
+  overflow: hidden;
+}
+
+/* The kit's grow-in animation replays on every width change; a width transition reads better. */
+.fill {
+  animation: none;
+  transition: width var(--prr-dur) var(--prr-ease);
+}
+
+.indeterminate {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(-45deg, var(--accent-subtle) 0 8px, transparent 8px 16px);
+  background-size: 200% 100%;
+  animation: slide 1.2s linear infinite;
+}
+
+@keyframes slide {
+  to {
+    background-position: -45px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
+
+  .indeterminate {
+    animation: none;
+  }
+}

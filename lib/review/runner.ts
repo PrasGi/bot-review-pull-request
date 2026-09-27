@@ -2,6 +2,7 @@ import type { ObjectId } from "mongodb";
 import { reviewRequestsCollection } from "@/lib/db/collections";
 import type { ReviewRequestDoc } from "@/lib/db/types";
 import { runReviewPipeline } from "@/lib/review/pipeline";
+import { createProgressReporter } from "@/lib/review/progress-store";
 import { PrClosedError } from "@/lib/review/errors";
 import { handleRequestFailure } from "@/lib/review/failure";
 import { log, errorFields } from "@/lib/logger";
@@ -89,7 +90,9 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
   ticker.unref();
 
   try {
-    await runReviewPipeline(request, heartbeat);
+    const progress = createProgressReporter(requestId);
+    await progress.stage("preparing");
+    await runReviewPipeline(request, heartbeat, progress);
     await markCompleted(requestId);
     log.info("review.pipeline.completed", {
       requestId: requestIdHex,

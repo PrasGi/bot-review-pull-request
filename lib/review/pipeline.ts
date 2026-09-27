@@ -71,6 +71,7 @@ import {
 import { recordAiCall } from "@/lib/review/audit";
 import { TEMPLATE_VERSION } from "@/lib/prompts/defaults";
 import { hasPullRequestMetadataChanged } from "@/lib/review/metadata";
+import { NOOP_PROGRESS, type ProgressReporter } from "@/lib/review/progress-store";
 
 // Budget: 96k input tokens per PR (12k x 8 chunks) so almost every PR gets FULL
 // coverage; small PRs only spend what their diff needs. Smaller chunks are what
@@ -216,6 +217,7 @@ async function runReplyReview(params: {
   requestId: ObjectId;
   repoId: ObjectId;
   userConnectionId: ObjectId;
+  progress: ProgressReporter;
 }): Promise<ReplyReviewOutcome> {
   const { prev, token, owner, repoName, prNumber, botLogin } = params;
 
@@ -276,6 +278,7 @@ async function runReplyReview(params: {
     config: params.config,
   });
 
+  await params.progress.stage("posting");
   const resolvedIndexes = new Set(
     evaluation.statuses.filter((s) => s.status === "resolved").map((s) => s.index),
   );
@@ -325,6 +328,7 @@ export interface PipelineResult {
 export async function runReviewPipeline(
   request: ReviewRequestDoc,
   heartbeat: () => Promise<void>,
+  progress: ProgressReporter = NOOP_PROGRESS,
 ): Promise<PipelineResult> {
   const pipelineStart = Date.now();
   const repos = await reposCollection();
@@ -343,12 +347,14 @@ export async function runReviewPipeline(
   const token = await getValidAccessToken(reviewer._id);
   const { owner, repo: repoName } = splitRepo(repo.fullName);
 
+  await progress.stage("fetching_pr");
   const pr = await fetchPullRequest(token, owner, repoName, request.prNumber);
   if (pr.merged || pr.state === "closed") {
     throw new PrClosedError(pr.merged ? "pr_merged" : "pr_closed");
   }
   await heartbeat();
 
+  await progress.stage("fetching_files");
   const delta = await resolveReviewScope({
     request,
     token,
@@ -360,6 +366,12 @@ export async function runReviewPipeline(
   });
 
   const { kept } = filterFiles(delta.files, repo.config.ignorePatterns);
+  const fileCounts = {
+    changed: delta.files.length,
+    kept: kept.length,
+    skipped: delta.files.length - kept.length,
+  };
+  await progress.stage("filtering", { files: fileCounts });
 
   const { provider, model, instance } = resolveModel(repo.config, settings);
   const pricing = settings.modelPricing.find(
@@ -369,6 +381,7 @@ export async function runReviewPipeline(
   if (kept.length === 0) {
     if (delta.kind === "re_review") {
       if (delta.previousReview) {
+        await progress.stage("evaluating_replies", { path: "reply" });
         const replyOutcome = await runReplyReview({
           prev: delta.previousReview,
           token,
@@ -386,8 +399,10 @@ export async function runReviewPipeline(
           requestId: request._id,
           repoId: repo._id,
           userConnectionId: reviewer._id,
+          progress,
         });
         await heartbeat();
+        await progress.stage("saving");
         if (replyOutcome.kind === "reviewed") {
           return persistReview({
             request,
@@ -410,6 +425,9 @@ export async function runReviewPipeline(
           });
         }
       }
+      if (!delta.previousReview) {
+        await progress.stage("saving", { path: "empty" });
+      }
       return persistReview({
         request,
         repoId: repo._id,
@@ -425,6 +443,7 @@ export async function runReviewPipeline(
         noop: true,
       });
     }
+    await progress.stage("posting", { path: "empty" });
     const body = buildReviewBody({
       verdict: "COMMENT",
       summary: "No reviewable code changes (only lockfiles/generated files).",
@@ -440,6 +459,7 @@ export async function runReviewPipeline(
       body,
       comments: [],
     });
+    await progress.stage("saving");
     return persistReview({
       request,
       repoId: repo._id,
@@ -461,6 +481,17 @@ export async function runReviewPipeline(
     maxChunks: Math.min(repo.config.maxChunks, MAX_CHUNKS),
   });
 
+  await progress.stage("building_prompts", {
+    path: "full",
+    chunks: {
+      total: chunks.length,
+      done: 0,
+      failed: 0,
+      running: 0,
+      repairs: 0,
+      unreviewedFiles: unreviewed.length,
+    },
+  });
   const reviewProfile = resolveReviewProfile(repo.config, pr.authorLogin);
   const systemPrompt = buildSystemPrompt(
     settings.promptTemplates[reviewProfile].system,
@@ -532,6 +563,7 @@ export async function runReviewPipeline(
         },
         repairDeadlineAt: pipelineStart + RETRY_DEADLINE_MS,
         audit: async (attempt) => {
+          if (attempt.purpose === "repair") await progress.chunkRepaired();
           await recordAiCall({
             requestId: request._id,
             repoId: repo._id,
@@ -560,8 +592,26 @@ export async function runReviewPipeline(
     }
   };
 
-  const settled = await mapWithConcurrency(chunks, CONCURRENCY_LIMIT, runChunk);
+  // Every chunk reports start and finish, so running/done/failed stay exact.
+  const trackedChunk = async (
+    chunk: (typeof chunks)[number],
+    index: number,
+  ): Promise<ParsedChunk | null> => {
+    await progress.chunkStarted();
+    try {
+      const result = await runChunk(chunk, index);
+      await progress.chunkFinished(result !== null);
+      return result;
+    } catch (error) {
+      await progress.chunkFinished(false);
+      throw error;
+    }
+  };
+
+  await progress.stage("reviewing");
+  const settled = await mapWithConcurrency(chunks, CONCURRENCY_LIMIT, trackedChunk);
   await heartbeat();
+  await progress.stage("finalizing");
 
   const succeeded = settled.filter(
     (s): s is PromiseFulfilledResult<ParsedChunk> =>
@@ -695,6 +745,7 @@ export async function runReviewPipeline(
       : f.comment,
   }));
 
+  await progress.stage("posting", { findings: findingsOut.length, verdict });
   const submitResult = await submitReview(token, {
     owner,
     repo: repoName,
@@ -708,6 +759,8 @@ export async function runReviewPipeline(
   if (!submitResult.inlinePosted) {
     for (const f of blockingFindings) f.posted = false;
   }
+
+  await progress.stage("saving");
 
   return persistReview({
     request,

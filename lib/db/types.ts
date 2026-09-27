@@ -143,6 +143,44 @@ export interface ReviewRequestTimings {
   githubMs?: number;
 }
 
+export type ReviewStage =
+  | "preparing"
+  | "fetching_pr"
+  | "fetching_files"
+  | "filtering"
+  | "building_prompts"
+  | "reviewing"
+  | "evaluating_replies"
+  | "finalizing"
+  | "posting"
+  | "saving";
+
+/** Which branch of the pipeline a run takes; known once the files are filtered. */
+export type ReviewPath = "full" | "reply" | "empty";
+
+export interface ReviewProgressChunks {
+  total: number;
+  done: number;
+  failed: number;
+  running: number;
+  repairs: number;
+  /** Files that did not fit the token budget and are not reviewed. */
+  unreviewedFiles: number;
+  lastFinishedAt?: Date;
+}
+
+/** Live progress written by the pipeline while a request is processing. */
+export interface ReviewProgress {
+  stage: ReviewStage;
+  path?: ReviewPath;
+  stageStartedAt: Date;
+  updatedAt: Date;
+  files?: { changed: number; kept: number; skipped: number };
+  chunks?: ReviewProgressChunks;
+  findings?: number;
+  verdict?: Verdict;
+}
+
 export interface ReviewRequestError {
   stage: string;
   message: string;
@@ -173,6 +211,7 @@ export interface ReviewRequestDoc {
   failureNotifiedAt?: Date;
   stats?: ReviewRequestStats;
   timings?: ReviewRequestTimings;
+  progress?: ReviewProgress;
   heartbeatAt?: Date;
   createdAt: Date;
   startedAt?: Date;

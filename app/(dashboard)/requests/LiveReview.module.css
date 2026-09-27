@@ -1,0 +1,109 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.section h2 {
+  margin: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.repo {
+  font: 700 14px/20px var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.prTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.open {
+  margin-left: auto;
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nums {
+  font: 700 12px/16px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  font: 400 12px/16px var(--font-mono);
+  color: var(--text-muted);
+}
+
+.stepper {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font: 400 12px/16px var(--font-mono);
+  color: var(--text-muted);
+}
+
+.step[data-state="current"] {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.step[data-state="done"] {
+  color: var(--text);
+}
