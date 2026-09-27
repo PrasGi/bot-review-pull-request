@@ -1,0 +1,20 @@
+<!-- @dsCard group="Data" height=72 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Pagination — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  function Demo() { var s = React.useState(1); return h(P.Pagination, { page: s[0], totalPages: 4, total: 57, onPageChange: s[1] }); }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

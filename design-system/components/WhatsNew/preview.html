@@ -1,0 +1,22 @@
+<!-- @dsCard group="Layout" height=340 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>WhatsNew — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  body{padding-left:360px}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  var LOG = [
+    { version: '0.4.0', date: '2026-08-11', title: 'Self-hosted tuning — bigger budget, honest verdicts', changes: ['Token budget per PR raised from 96k to 1,000,000.', 'An incomplete review posts a COMMENT only.'] },
+    { version: '0.3.0', date: '2026-08-07', title: 'Per-author review profiles', changes: ['A repo can override its review profile per GitHub author.'] }];
+  ReactDOM.createRoot(document.getElementById('root')).render(h(P.WhatsNew, { entries: LOG, defaultOpen: true }));
+</script>
+</body>
+</html>

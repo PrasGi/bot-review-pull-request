@@ -1,0 +1,19 @@
+<!-- @dsCard group="Review" height=160 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CodeBlock — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(P.CodeBlock, { label: 'Prompt', maxHeight: 96 }, 'You are a senior reviewer. Review ONLY the diff below.\nPersonality: professional\n\ndiff --git a/lib/review/chunk.ts b/lib/review/chunk.ts\n@@ -108,7 +108,9 @@\n-  for (const h of hunks) {\n+  for (const h of splitHunks(diff)) {'));
+</script>
+</body>
+</html>

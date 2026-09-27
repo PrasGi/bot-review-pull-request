@@ -1,0 +1,21 @@
+<!-- @dsCard group="Forms" height=96 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Slider — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'grid' },
+    h(P.Slider, { label: 'Max chunks', min: 1, max: 20, defaultValue: [8] }),
+    h(P.Slider, { label: 'Temperature', min: 0, max: 100, defaultValue: 30, format: function (v) { return (v / 100).toFixed(2); } })));
+</script>
+</body>
+</html>

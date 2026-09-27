@@ -1,0 +1,22 @@
+<!-- @dsCard group="Review" height=470 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>FindingCard — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'col' },
+    h(P.FindingCard, { severity: 'major', category: 'security', location: 'app/api/webhook/route.ts:48–52', comment: 'The signature is compared with === — use timingSafeEqual so the secret cannot be guessed byte by byte.', suggestion: "crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))", blocking: true, posted: true }),
+    h(P.FindingCard, { severity: 'minor', category: 'readability', location: 'lib/review/chunk.ts:112', comment: 'This loop duplicates splitHunks(); reuse it.' }),
+    h(P.FindingCard, { severity: 'nit', category: 'style', location: 'README.md:14', comment: 'Typo: “recieve”.', posted: true })));
+</script>
+</body>
+</html>

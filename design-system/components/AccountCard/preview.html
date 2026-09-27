@@ -1,0 +1,26 @@
+<!-- @dsCard group="Projects" height=300 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>AccountCard — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  function Demo() { var s = React.useState(false);
+    return h('div', { className: 'grid', style: { gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))' } },
+      h(P.AccountCard, { displayName: 'Prasetyo', login: 'prasgi', repoCount: 12, syncing: s[0], onResync: function () { s[1](true); setTimeout(function () { s[1](false); P.toast.success('Re-sync complete', '12 repositories synced.'); }, 1200); },
+        installations: [{ login: 'prasgi', type: 'User' }, { login: 'weyoco', type: 'Organization' }] }),
+      h(P.AccountCard, { displayName: 'YoCo Bot', login: 'yoco-bot', repoCount: 1, reconnectRequired: true, installations: [{ login: 'yocoapp', type: 'Organization' }] }),
+      h(P.Toaster));
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

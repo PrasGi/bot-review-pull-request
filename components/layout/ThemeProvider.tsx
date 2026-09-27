@@ -10,7 +10,7 @@ type ThemeProviderProps = {
 function ThemeProvider({ children }: ThemeProviderProps): React.ReactElement {
   return (
     <NextThemesProvider
-      attribute="class"
+      attribute="data-theme"
       defaultTheme="system"
       enableSystem
       disableTransitionOnChange

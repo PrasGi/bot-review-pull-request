@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PR Reviewer — example dashboard</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components/bundle.css">
+<style>html,body{margin:0}</style>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="components/bundle.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  var DAYS = [['Mon',14,1],['Tue',22,3],['Wed',18,0],['Thu',27,2],['Fri',31,4],['Sat',9,0],['Sun',7,1]].map(function (d) { return { label: d[0], completed: d[1], failed: d[2] }; });
+  function App() {
+    return h(P.AppShell, { title: 'Dashboard', activeHref: '/', changelog: [{ version: '0.4.0', date: '2026-08-11', title: 'Self-hosted tuning', changes: ['Token budget per PR raised to 1,000,000.'] }] },
+      h(P.PageHeader, { title: 'Dashboard', description: 'Review activity across every connected repo.', actions: h(P.LiveIndicator) }),
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16 } },
+        h(P.StatCard, { label: 'Reviews today', value: '18', icon: 'pr', delta: '+12%', hint: 'vs yesterday' }),
+        h(P.StatCard, { label: 'This week', value: '128', icon: 'chart' }),
+        h(P.StatCard, { label: 'Cost this month', value: '$12.40', icon: 'dashboard' }),
+        h(P.StatCard, { label: 'Avg review', value: '1m 42s', icon: 'clock' })),
+      h(P.Card, null, h(P.BudgetMeter, { spent: 4.3, limit: 5 })),
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))', gap: 24 } },
+        h(P.ChartCard, { title: 'Reviews per day' }, h(P.BarChart, { data: DAYS, series: [{ key: 'completed', label: 'Completed', tone: 'accent' }, { key: 'failed', label: 'Failed', tone: 'error', hatch: true }] })),
+        h(P.ChartCard, { title: 'Verdict distribution' }, h(P.DonutChart, { data: [{ label: 'Approve', value: 94, tone: 'success' }, { label: 'Request changes', value: 22, tone: 'error' }, { label: 'Comment', value: 12, tone: 'warning' }], centerLabel: 'reviews' }))),
+      h(P.Card, { title: 'Needs attention' }, h(P.AttentionList, null,
+        h(P.AttentionItem, { tone: 'warning', title: '2 accounts need reconnecting', tags: ['prasgi', 'weyoco'], action: { label: 'Manage in Projects' } }),
+        h(P.AttentionItem, { tone: 'error', title: '3 failed reviews in the last 24h', action: { label: 'View failed requests' } }))),
+      h(P.Toaster));
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>

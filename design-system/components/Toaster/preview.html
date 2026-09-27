@@ -1,0 +1,24 @@
+<!-- @dsCard group="Feedback" height=240 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Toaster — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  P.toast.success('Review posted', 'APPROVE on PrasGi/bot-review-pull-request#42', { duration: Infinity });
+  P.toast.error('Review failed', 'Provider timed out — retrying in 30s', { duration: Infinity });
+  P.toast.warning('Daily token budget at 80%', undefined, { duration: Infinity });
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'col' },
+    h('div', { className: 'row' }, h(P.Button, { size: 'sm', variant: 'secondary', onClick: function () { P.toast.info('Queued', 'Waiting for diff'); } }, 'Fire a toast')),
+    h(P.Toaster, { inline: true })));
+</script>
+</body>
+</html>

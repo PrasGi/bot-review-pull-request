@@ -1,0 +1,21 @@
+<!-- @dsCard group="Review" height=220 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Disclosure — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'col' },
+    h(P.Disclosure, { summary: 'Chunk 1 · glm-4.6 · 4,213 tokens', defaultOpen: true }, h(P.CodeBlock, { label: 'Response', maxHeight: 64 }, '{ "verdict": "APPROVE", "findings": [] }')),
+    h(P.Disclosure, { summary: 'Chunk 2 · glm-4.6 · 3,980 tokens' }, h(P.CodeBlock, null, '…'))));
+</script>
+</body>
+</html>

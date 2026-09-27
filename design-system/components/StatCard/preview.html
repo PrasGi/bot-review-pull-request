@@ -1,0 +1,23 @@
+<!-- @dsCard group="Dashboard" height=180 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>StatCard — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'grid' },
+    h(P.StatCard, { label: 'Reviews today', value: '18', icon: 'pr', delta: '+12%', hint: 'vs yesterday' }),
+    h(P.StatCard, { label: 'Cost this month', value: '$12.40', icon: 'chart', delta: '-4%', hint: 'vs last month' }),
+    h(P.StatCard, { label: 'Avg review', value: '1m 42s', icon: 'clock' }),
+    h(P.StatCard, { loading: true })));
+</script>
+</body>
+</html>

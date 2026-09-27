@@ -1,0 +1,22 @@
+<!-- @dsCard group="Forms" height=290 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Select — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  var models = [{ value: 'glm', label: 'GLM (default)' }, { value: 'kimi', label: 'Kimi' }, { value: 'openai', label: 'OpenAI' }, { value: 'anthropic', label: 'Anthropic' }];
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'grid' },
+    h(P.Select, { label: 'Provider', options: models, defaultValue: 'glm', defaultOpen: true }),
+    h(P.Select, { label: 'Personality', placeholder: 'Choose…', options: [{ value: 'chill', label: 'chill' }, { value: 'normal', label: 'normal' }, { value: 'professional', label: 'professional' }, { value: 'expert', label: 'expert' }], error: 'Pick a personality.' })));
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!-- @dsCard group="Charts" height=330 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>BarChart — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  var DAYS = [['Mon',14,1],['Tue',22,3],['Wed',18,0],['Thu',27,2],['Fri',31,4],['Sat',9,0],['Sun',7,1]].map(function (d) { return { label: d[0], completed: d[1], failed: d[2] }; });
+  var SERIES = [{ key: 'completed', label: 'Completed', tone: 'accent' }, { key: 'failed', label: 'Failed', tone: 'error', hatch: true }];
+  ReactDOM.createRoot(document.getElementById('root')).render(h(P.ChartCard, { title: 'Reviews per day' }, h(P.BarChart, { data: DAYS, series: SERIES, height: 220, ariaLabel: 'Completed and failed reviews per day' })));
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Layout" height=300 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Header — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  body{padding:0}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  var LOG = [
+    { version: '0.4.0', date: '2026-08-11', title: 'Self-hosted tuning — bigger budget, honest verdicts', changes: ['Token budget per PR raised from 96k to 1,000,000.', 'An incomplete review posts a COMMENT only.'] },
+    { version: '0.3.0', date: '2026-08-07', title: 'Per-author review profiles', changes: ['A repo can override its review profile per GitHub author.'] }];
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'col', style: { gap: 24 } },
+    h(P.Header, { title: 'Review Requests', changelog: LOG }),
+    h(P.Header, { title: 'AI Usage', changelog: LOG, unread: false, status: 'degraded', actions: h(P.Button, { size: 'sm', variant: 'secondary' }, h(P.Icon, { name: 'download', size: 14 }), 'Export CSV') }),
+    h(P.Header, { title: 'Settings', changelog: false, status: 'down' })));
+</script>
+</body>
+</html>

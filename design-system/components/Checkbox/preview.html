@@ -1,0 +1,22 @@
+<!-- @dsCard group="Forms" height=112 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Checkbox — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'col' },
+    h(P.Checkbox, { label: 'Review draft PRs', defaultChecked: true }),
+    h(P.Checkbox, { label: 'Post inline comments' }),
+    h(P.Checkbox, { label: 'Block merge on REQUEST_CHANGES (owner only)', disabled: true })));
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!-- @dsCard group="Data" height=600 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DataTable — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  var ROWS = [
+    { id: 1, pr: 42, title: 'Add reply-aware re-review', repo: 'PrasGi/bot-review-pull-request', author: 'prasgi', kind: 'review', status: 'completed', verdict: 'APPROVE', dur: '1m 12s', cost: '$0.0421', at: '2m ago' },
+    { id: 2, pr: 41, title: 'Fix chunking for huge diffs', repo: 'PrasGi/bot-review-pull-request', author: 'dina', kind: 're_review', status: 'processing', verdict: null, dur: null, cost: '$0.0112', at: '5m ago' },
+    { id: 3, pr: 318, title: 'Checkout: retry on 502', repo: 'weyoco/avora', author: 'rian', kind: 'review', status: 'completed', verdict: 'REQUEST_CHANGES', dur: '2m 03s', cost: '$0.0877', at: '1h ago' },
+    { id: 4, pr: 77, title: 'Bump next to 16.2', repo: 'yocoapp/web', author: 'bot', kind: 'review', status: 'failed', verdict: null, dur: '14s', cost: '$0.0000', at: '3h ago' }];
+  var SV = { completed: 'success', failed: 'error', processing: 'info', queued: 'info' }, VV = { APPROVE: 'success', REQUEST_CHANGES: 'error', COMMENT: 'warning' };
+  var COLS = [
+    { key: 'pr', header: 'Pull request', render: function (r) { return h('div', null, h('a', { className: 'prr-cell-title', href: '#' }, '#' + r.pr + ' ' + r.title),
+      h('div', { className: 'prr-cell-sub' }, h('span', { className: 'prr-mono' }, r.repo), '·', '@' + r.author, '·', h(P.Badge, null, r.kind.replace(/_/g, ' ')))); } },
+    { key: 'status', header: 'Status', render: function (r) { return h(P.Badge, { variant: SV[r.status] || 'neutral', className: r.status === 'processing' ? 'is-live' : undefined }, r.status); } },
+    { key: 'verdict', header: 'Verdict', render: function (r) { return r.verdict ? h(P.Badge, { variant: VV[r.verdict] }, r.verdict.replace(/_/g, ' ')) : h('span', { className: 'prr-hint' }, '—'); } },
+    { key: 'dur', header: 'Duration', mono: true, muted: true, render: function (r) { return r.dur || (r.status === 'processing' ? 'running…' : '—'); } },
+    { key: 'cost', header: 'Cost', align: 'right', mono: true, muted: true },
+    { key: 'at', header: 'Created', muted: true }];
+  function Demo() {
+    var s = React.useState(1);
+    return h(P.DataTable, { caption: 'Review requests', columns: COLS, rows: ROWS,
+      toolbar: h(React.Fragment, null,
+        h(P.Select, { label: 'Status', options: [{ value: '', label: 'All statuses' }, { value: 'failed', label: 'Failed' }], defaultValue: '', containerClassName: 'prr-w160' }),
+        h(P.Input, { label: 'Search', type: 'search', placeholder: 'PR title, author, number…', containerClassName: 'prr-grow' })),
+      footer: h(P.Pagination, { page: s[0], totalPages: 4, total: 57, onPageChange: s[1] }) });
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

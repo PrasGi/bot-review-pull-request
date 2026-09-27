@@ -1,0 +1,29 @@
+<!-- @dsCard group="Actions" height=128 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Button — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'col' },
+    h('div', { className: 'row' },
+      h(P.Button, null, 'Review PR'),
+      h(P.Button, { variant: 'secondary' }, 'View diff'),
+      h(P.Button, { variant: 'destructive' }, 'Disconnect'),
+      h(P.Button, { variant: 'ghost' }, 'Cancel')),
+    h('div', { className: 'row' },
+      h(P.Button, { size: 'sm' }, 'Retry'),
+      h(P.Button, { size: 'sm', variant: 'secondary', loading: true }, 'Syncing'),
+      h(P.Button, { size: 'icon', variant: 'secondary', 'aria-label': 'More' }, '⋮'),
+      h(P.Button, { disabled: true }, 'Disabled'))));
+</script>
+</body>
+</html>

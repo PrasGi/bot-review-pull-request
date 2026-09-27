@@ -1,0 +1,34 @@
+{
+  "v": 3,
+  "assetGroups": {},
+  "blobs": {},
+  "createdOnFiles": {
+    "at": "2026-09-27T02:50:00Z",
+    "v": 1
+  },
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "groups": [],
+  "lastChange": {
+    "by": "Pras",
+    "at": "2026-09-27T03:14:58Z",
+    "via": "GitHub · PrasGi/bot-review-pull-request@e0ea950",
+    "note": "Added dashboard layer (31 components: shell, sidebar, header, KPIs, tables, SVG charts, projects, login) and replaced native Select/Slider/Textarea with custom controls"
+  },
+  "layout": "files",
+  "libraries": [
+    {
+      "name": "react",
+      "version": "18"
+    },
+    {
+      "name": "react-dom",
+      "version": "18"
+    }
+  ],
+  "namespace": "PRR",
+  "sections": {},
+  "title": "PR Reviewer"
+}

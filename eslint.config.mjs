@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Design-system reference (UMD bundle and previews), not app code.
+    "design-system/**",
   ]),
 ]);
 

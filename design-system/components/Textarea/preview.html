@@ -1,0 +1,21 @@
+<!-- @dsCard group="Forms" height=200 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Textarea — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'grid' },
+    h(P.Textarea, { label: 'Extra review rules', placeholder: 'e.g. Flag any new env var not documented in README.', hint: 'Appended to the system prompt for this repo.' }),
+    h(P.Textarea, { label: 'Ignore paths', defaultValue: '**/*.lock', error: 'One glob per line.' })));
+</script>
+</body>
+</html>

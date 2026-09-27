@@ -1,0 +1,63 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PR Reviewer</title>
+<style>
+  html, body { margin:0; height:100%; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font-sans); overflow:hidden; }
+  .cover { position:relative; width:960px; height:288px; overflow:hidden; }
+  .art { position:absolute; top:0; left:480px; width:480px; height:288px; overflow:hidden; }
+  .art svg { display:block; }
+  .edge { stroke:var(--text); stroke-width:3; }
+  .shadow { fill:var(--text); }
+  .accent { fill:var(--accent); }
+  .hi { fill:var(--highlight); }
+  .ink { fill:var(--text); }
+  .surf { fill:var(--surface); }
+  .err { fill:var(--error); }
+  .ok { fill:var(--success); }
+  .stripe { fill:var(--on-fill); }
+  .words { position:absolute; left:var(--space-8); bottom:var(--space-8); max-width:440px; }
+  .name { margin:0; font-size:88px; line-height:.95; font-weight:800; letter-spacing:-.04em; color:var(--text); }
+  .tag { margin:var(--space-3) 0 0 2px; font:500 14px/20px var(--font-mono); color:var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 288" width="480" height="288">
+<!--
+  blocks      accent 160×256 slab bled off the top (the brand blue, largest) · highlight 144×128 (marker yellow) · surface 128×96 · error 48×48 and success 48×48 stamps (states, kept small) — each outlined border-thick in text with a shadow-md/-lg hard offset
+  arrangement one tall accent slab with stacked satellites, bottoms on one line space-8 above the edge, space-4 gutters, the surface block bleeding off the right
+  pattern     diagonal hatching (the Skeleton's marching stripes) at a space-4 pitch clipped into the highlight block — "loud, bold, poster type" + hard edges → stripes
+  scales      sides in space-4/space-8 multiples; shadows 4px/8px offsets (shadow-md, shadow-lg); every corner radius-card = 0px; strokes border-thick 3px
+-->
+<defs><clipPath id="hc"><rect x="192" y="128" width="144" height="128"/></clipPath></defs>
+<rect class="shadow" x="40" y="-24" width="160" height="256"/>
+<rect class="accent edge" x="32" y="-32" width="160" height="256"/>
+<rect class="shadow" x="216" y="136" width="144" height="128"/>
+<rect class="hi edge" x="208" y="128" width="144" height="128"/>
+<g clip-path="url(#hc)" transform="translate(16 0)">
+  <polygon class="stripe" points="192,152 216,128 224,128 192,160"/>
+  <polygon class="stripe" points="192,184 248,128 256,128 192,192"/>
+  <polygon class="stripe" points="192,216 280,128 288,128 192,224"/>
+  <polygon class="stripe" points="192,248 312,128 320,128 192,256"/>
+</g>
+<rect class="shadow" x="372" y="56" width="128" height="96"/>
+<rect class="surf edge" x="368" y="48" width="128" height="96"/>
+<rect class="ok edge" x="208" y="48" width="48" height="48"/>
+<rect class="err edge" x="272" y="48" width="48" height="48"/>
+<rect class="ink" x="368" y="176" width="112" height="16"/>
+<rect class="ink" x="368" y="208" width="80" height="16"/>
+<rect class="ink" x="368" y="240" width="96" height="16"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">PR<br>Reviewer</h1>
+<p class="tag">Reviews the change, not the whole repo.</p>
+</div>
+</div>
+</body>
+</html>

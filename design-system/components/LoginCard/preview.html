@@ -1,0 +1,22 @@
+<!-- @dsCard group="Auth" height=460 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>LoginCard — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  body{display:grid;place-items:center;min-height:420px}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  function Demo() { var s = React.useState(null), l = React.useState(false);
+    return h(P.LoginCard, { loading: l[0], error: s[0], onSubmit: function (v) { l[1](true); setTimeout(function () { l[1](false); s[1](v.password ? null : 'Invalid email or password'); }, 900); } });
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

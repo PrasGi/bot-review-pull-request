@@ -1,0 +1,21 @@
+<!-- @dsCard group="Layout" height=200 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Card — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'grid' },
+    h(P.Card, { kicker: 'Reviews · 7d', title: '128 PRs', hoverLift: true }, h('p', { style: { margin: 0, color: 'var(--text-muted)' } }, '94 approved · 22 changes · 12 comments')),
+    h(P.Card, { kicker: 'AI cost · 7d', title: '$3.42', hoverLift: true }, h('p', { style: { margin: 0, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' } }, '1,284,301 tokens'))));
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Overlays" height=200 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ConfirmDialog — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  .prr-overlay{position:absolute;background:transparent;animation:none} #root{position:relative;min-height:170px}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  function Demo() {
+    var s = React.useState(true);
+    return h('div', null,
+      h(P.Button, { variant: 'destructive', onClick: function () { s[1](true); } }, 'Disconnect'),
+      h(P.ConfirmDialog, { open: s[0], onOpenChange: s[1], inline: true, destructive: true, title: 'Disconnect account?', description: 'The bot stops reviewing every repo on this account.', confirmLabel: 'Disconnect', onConfirm: function () { s[1](false); } }));
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

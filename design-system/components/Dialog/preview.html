@@ -1,0 +1,28 @@
+<!-- @dsCard group="Overlays" height=260 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Dialog — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; align-items:start; }
+  .prr-overlay{position:absolute;background:transparent;animation:none} #root{position:relative;min-height:220px}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  function Demo() {
+    var s = React.useState(true);
+    return h('div', null,
+      h(P.Button, { variant: 'secondary', onClick: function () { s[1](true); } }, 'Configure repo'),
+      h(P.Dialog, { open: s[0], onOpenChange: s[1], inline: true, title: 'PrasGi/bot-review-pull-request', description: 'Per-repo review settings.' },
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 } },
+          h(P.Select, { label: 'Provider', options: [{ value: 'glm', label: 'GLM (default)' }, { value: 'kimi', label: 'Kimi' }] }),
+          h('div', { className: 'prr-dialog-actions', style: { marginTop: 8 } }, h(P.Button, { variant: 'secondary', onClick: function () { s[1](false); } }, 'Cancel'), h(P.Button, null, 'Save')))));
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(h(Demo));
+</script>
+</body>
+</html>

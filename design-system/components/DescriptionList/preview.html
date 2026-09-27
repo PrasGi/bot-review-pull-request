@@ -1,0 +1,21 @@
+<!-- @dsCard group="Data" height=200 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DescriptionList — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'grid' },
+    h(P.Card, null, h(P.DescriptionList, { title: 'Details', items: [{ term: 'Created', value: 'Sep 27, 09:41' }, { term: 'Finished', value: 'Sep 27, 09:42' }, { term: 'Head SHA', value: 'e0ea950', mono: true }, { term: 'Total cost', value: '$0.0421', mono: true }] })),
+    h(P.Card, null, h(P.DescriptionList, { title: 'Timings', items: [{ term: 'Queued', value: '120ms', mono: true }, { term: 'AI', value: '58.4s', mono: true }, { term: 'GitHub', value: '1.1s', mono: true }] }))));
+</script>
+</body>
+</html>

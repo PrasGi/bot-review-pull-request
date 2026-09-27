@@ -1,0 +1,22 @@
+<!-- @dsCard group="Dashboard" height=260 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>BudgetMeter — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h('div', { className: 'col', style: { gap: 28 } },
+    h(P.BudgetMeter, { label: 'Daily budget', spent: 2.1, limit: 5 }),
+    h(P.BudgetMeter, { label: 'Daily budget', spent: 4.3, limit: 5 }),
+    h(P.BudgetMeter, { label: 'Daily budget', spent: 6.2, limit: 5 })));
+</script>
+</body>
+</html>

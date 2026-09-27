@@ -1,0 +1,24 @@
+<!-- @dsCard group="Layout" height=440 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Sidebar — preview</title>
+<style>
+  body { margin:0; padding:20px 24px 28px; }
+  .row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; }
+  .col { display:flex; flex-direction:column; gap:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:20px; align-items:start; }
+  body{padding:0} #root{display:flex;gap:32px} .prr-sidebar{height:440px}
+</style></head>
+<body>
+<div id="root"></div>
+<script>
+  var P = window.PRR, h = React.createElement;
+  ReactDOM.createRoot(document.getElementById('root')).render(h(React.Fragment, null,
+    h(P.Sidebar, { activeHref: '/requests', items: [
+      { label: 'Dashboard', href: '/', icon: 'dashboard' }, { label: 'Requests', href: '/requests', icon: 'pr', badge: 3 },
+      { label: 'AI Usage', href: '/usage', icon: 'chart' }, { label: 'Projects', href: '/projects', icon: 'folder' }, { label: 'Settings', href: '/settings', icon: 'settings' }],
+      onNavigate: function () {} }),
+    h(P.Sidebar, { activeHref: '/usage', defaultCollapsed: true, onNavigate: function () {} })));
+</script>
+</body>
+</html>
