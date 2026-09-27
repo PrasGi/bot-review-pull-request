@@ -1,228 +1,273 @@
 <div align="center">
 
-# 🤖 PR Reviewer
+# PR Reviewer
 
-**An AI-powered GitHub bot that reviews your pull requests — automatically, as your own account.**
+**A self-hosted AI bot that reviews GitHub pull requests as your own account, and tells you exactly what it did and didn't read.**
 
-Webhook-driven · Multi-provider AI · Multi-account/repo · Full audit dashboard
+Webhook-driven · Multi-provider AI · Full audit trail · Honest about its limits
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
-![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?logo=mongodb)
-![Tailwind](https://img.shields.io/badge/Tailwind-v4-38BDF8?logo=tailwindcss)
+![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
 </div>
 
 ---
 
-## ✨ Summary
+## What it is
 
-Request a review on a GitHub PR → the bot fetches the diff, runs it through an LLM, and posts a real review (**APPROVE / REQUEST_CHANGES / COMMENT**) with inline comments — **attributed to your own GitHub account**, so the pending "requested reviewer" is satisfied. Every request, prompt, token, and cost is stored and browsable in an admin dashboard.
+Request a review from a connected GitHub user on a pull request. PR Reviewer fetches the diff, reviews it with an LLM, and posts a real GitHub review (**APPROVE**, **REQUEST_CHANGES** or **COMMENT**) with inline comments. The review is **attributed to that user's account**, so the pending review request is satisfied.
 
-### What makes it different
+Every request, prompt, response, token and dollar is stored and browsable in an admin dashboard.
 
-| | |
-|---|---|
-| 🎭 **4 reviewer personalities** | `chill` · `normal` · `professional` · `expert` — per-repo, from lenient mentor to principal-level stickler |
-| 🎯 **Scope discipline** | Reviews the *change*, not the whole repo — won't flag "missing auth guard" when it's wired globally outside the diff |
-| 💬 **Reply-aware re-review** | Reply to a finding (no new commit) → the bot reads your rebuttal, re-evaluates, and can APPROVE if resolved |
-| 🔁 **Smart re-reviews** | Delta-diff since last review, tracks resolved/unresolved findings, merge/rebase aware |
-| 🧩 **Multi-provider AI** | GLM (default), Kimi, OpenAI, Anthropic — switchable per repo, exact token counting |
-| 👥 **Multi-account / multi-org** | Connect several GitHub accounts; org repos supported (incl. member-request → owner-approval flow) |
-| 📊 **Live dashboard** | Requests (auto-refresh 5s), AI usage & cost, per-repo config, connection health |
-| 🔒 **Safe by design** | Silent on the PR when it fails · uncertain findings never block, they ask you to double-check · encrypted tokens (AES-256-GCM) |
-
-### Tech stack
-
-`Next.js 16 (App Router)` · `React 19` · `TypeScript` · `MongoDB Atlas` · `Tailwind v4` · `Vercel (Hobby + Fluid compute)`
+This README describes what the code does today. Every limit below comes from a constant in the source, and the [limitations](#limitations) are listed as plainly as the strengths.
 
 ---
 
-## 🚀 Installation
+## How it works
 
-> **TL;DR:** deploy → register a GitHub App (grab tokens) → set env vars → seed DB → connect your GitHub account.
-> Full runbook with every screenshot-level detail lives in **[`docs/setup.md`](./docs/setup.md)**. This section covers the essentials, especially **how to get the GitHub tokens**.
+```
+GitHub webhook ─▶ signature + dedupe + rate limit ─▶ trigger matrix ─▶ review_requests (queued)
+                                                                               │  after()
+                                                                               ▼
+   posted review ◀─ verdict (decided by code) ◀─ scope guard ◀─ LLM chunks ◀─ diff filter + chunking
+```
 
-### Prerequisites
+**What starts a review** (`lib/webhook/trigger-matrix.ts`):
 
-| Need | Where | Result |
+| `pull_request` action | What happens |
+|---|---|
+| `review_requested` (a connected user is the reviewer) | Queued. A draft PR is recorded as `skipped_draft` instead |
+| `ready_for_review` | Queued, only if that PR was skipped earlier as a draft |
+| `synchronize` (new commits) | No new review. The running review gets a "new commits were pushed" note |
+| `closed`, `review_request_removed` | Queued reviews are cancelled |
+| anything else (`opened`, comments, team requests) | Ignored |
+
+The bot never reviews by itself. Someone has to request a review from a connected user.
+
+---
+
+## Strengths
+
+### It reviews the change, not the whole repo
+- **A scope guard** (`lib/review/scope-guard.ts`) drops or downgrades findings the diff can't justify:
+  - "undefined symbol" and "inconsistent with the rest of the codebase" findings are dropped
+  - "missing auth or validation" is kept only if the diff removed it or your guidelines ask for it
+  - speculative blocking findings are downgraded
+  - A downgrade makes a finding non-blocking and prefixes it with "Please double-check…".
+- **Named vulnerability classes always survive.** A finding that names open redirect, SQL, command or template injection, SSRF, path traversal, JWT or signature checks, timing attacks, hard-coded secrets and similar is never dropped. The guard has 17 tests, including a real "AuthGuard" incident.
+- **Code decides the verdict**, not the model (`lib/review/verdict.ts`):
+  - Any blocking finding → `REQUEST_CHANGES`.
+  - Only non-blocking notes → `APPROVE` with a "double-check" caveat.
+  - Auto-verdict off → always `COMMENT`.
+
+### It is honest when it couldn't read everything
+If files were left out (token budget), time ran out, or a chunk failed, the verdict is **forced to `COMMENT`**. The review body then states why and lists the skipped files. A partial read never approves or blocks code it didn't see.
+
+### It fails loudly, not silently
+- A failed review is **retried automatically once**, 60 seconds later.
+- If the retry fails too, the bot posts **one** neutral comment on the PR saying the review could not be completed and asking for a re-request.
+- The comment never includes internal error text, which can contain provider output.
+- A runner and the stale-run reaper can't both post it (atomic `failureNotifiedAt`), and nothing is posted if a review already went out (`lib/review/failure.ts`).
+
+### Re-reviews that respect your time
+- **Delta only.** A re-review compares against the SHA of the last review and reads only what changed. It falls back to a full review after a force-push or diverged history (`lib/github/compare.ts`).
+- **Reply-aware.** Reply to a finding instead of pushing code, then re-request. The bot classifies each finding as resolved, unresolved or not determinable. It acknowledges the resolved ones and recomputes the verdict, so it can flip to `APPROVE`.
+- **Title and body changes** trigger a full review even without new commits.
+
+### Tunable per repo and per author
+
+| Profile | Max findings | Lowest severity reported |
 |---|---|---|
-| MongoDB cluster | [mongodb.com/cloud/atlas](https://mongodb.com/cloud/atlas) (free M0) | `MONGODB_URI` |
-| Hosting | [vercel.com](https://vercel.com) (Hobby + Fluid compute) | `APP_URL` |
-| GitHub App | GitHub → Developer settings | 5 GitHub secrets (below) |
-| AI key | [z.ai/model-api](https://z.ai/model-api) (GLM, default) — one key works on both endpoints, see [`docs/setup.md`](./docs/setup.md#which-glm-endpoint-glm_base_url) | `GLM_API_KEY` |
-| `pnpm` + `openssl` | local machine | run scripts & generate secrets |
+| `chill` (default for new repos) | 5 | major |
+| `normal` | 5 | major |
+| `professional` | 25 | minor |
+| `expert` | 40 | nit |
 
-### Step 1 — Deploy first (empty is fine)
+- **Per-author overrides:** up to 50, so one repo can review one author as `expert` and everyone else as `chill`.
+- **Per repo you can set:**
+  - provider and model
+  - auto-verdict on or off
+  - custom guidelines (≤ 2,000 chars)
+  - ignore globs (≤ 50)
+  - max chunks (1–84)
 
-The GitHub App needs a **public webhook URL**, so deploy to Vercel once to get your `APP_URL` (e.g. `https://your-app.vercel.app`), then register the App against it.
+### Built for large PRs
 
-### Step 2 — Register the GitHub App & get the tokens 🔑
+| Limit | Value (`lib/review/pipeline.ts`) |
+|---|---|
+| Input budget per PR | 1,000,000 tokens |
+| Chunk size | 12,000 tokens |
+| Max chunks | 84 |
+| Chunks in parallel | 4 |
+| Per-call timeout | 10 min |
+| No new retries after | 20 min |
+| Whole-review deadline | 30 min |
 
-This is the part people get stuck on. Go to **GitHub → Settings → Developer settings → GitHub Apps → New GitHub App** and fill in:
+- **Chunk order:** source code goes first, then other files, config and docs; within each group, larger files go first.
+- **Oversized files:** a file bigger than a chunk keeps its first 60% and last 40%.
+- **Always skipped:** lockfiles, generated or build output, binaries and minified files.
 
-<details>
-<summary><b>📋 GitHub App settings (click to expand)</b></summary>
+### Robust to bad model output
+- The response schema is lenient: long fields are truncated, 0–100 confidence is normalized, and a malformed finding is dropped rather than failing the review.
+- Invalid JSON gets **one repair call**.
+- A response where *every* finding is malformed is rejected, so a garbled answer can't turn into a silent `APPROVE`.
+- Findings are kept only on lines the PR added.
+- If GitHub rejects the inline comments, the review is re-posted as summary-only instead of being lost.
+
+### Multi-provider, with real cost tracking
+- **GLM** (default) is supported, and so are **Kimi**, **OpenAI** and **Anthropic**. The provider is chosen globally, and a repo can override it.
+- **API keys** come from the dashboard, encrypted at rest, or from env vars.
+- **Every AI call is audited** in `ai_calls`: gzipped prompt and response, tokens, cost, latency and status. You can read the full prompt and response for any review in the dashboard.
+- **Usage page:** cost and tokens by day, model or repo, with CSV export. A daily budget meter sits on the dashboard.
+
+### Security built in
+- **Encryption at rest:** GitHub access and refresh tokens and provider API keys are encrypted with AES-256-GCM (`lib/crypto.ts`).
+- **Webhooks:** HMAC-SHA256 signature verification with a constant-time compare. Deliveries are deduplicated for 7 days, and each IP is rate limited.
+- **Prompt injection:** PR content is wrapped as untrusted data, and injection attempts are reported as a security finding.
+- **Admin login:** argon2 password hash, random session tokens stored only as SHA-256, `httpOnly` cookie, login rate limit, and an origin check on mutating API calls.
+- **GitHub tokens:** expiring user tokens only. Refresh runs under a DB lock, and the account is flagged when it needs reconnecting.
+
+### Multi-account and org friendly
+- **Several accounts:** you can connect several GitHub accounts.
+- **Org repos:** if you are only a member, the install becomes a pending request, and it syncs automatically once an owner approves it.
+- **Health warnings:** the dashboard flags accounts that need reconnecting, tokens expiring within 14 days, repos with no webhook events for 7 days, and failures in the last 24 hours.
+
+### A dashboard you can actually read
+- **Pages:** Dashboard, Requests (live, refreshes every 5 s), request detail, AI Usage, Projects and Settings.
+- **Design:** built on an in-house brutalist design system (`design-system/`, `components/`) with plain CSS Modules and hand-drawn SVG charts. There is no Tailwind, no Radix and no chart library.
+- **Themes:** light and dark.
+
+### Tested where it matters
+There are **197 test cases in 28 files** (Vitest). They cover:
+- the scope guard, verdict rules, schema salvage, chunking and the tokenizer
+- summaries and replies
+- the failure retry and comment path
+- the webhook trigger matrix and signatures
+- crypto and the retry utility
+
+---
+
+## Limitations
+
+These are true of the current code. Some are deliberate trade-offs; others are gaps.
+
+**Security and cost**
+- **Open-install exposure.** `/api/github/connect` doesn't require an admin session, new repos are enabled by default, and the setup docs register the App for "Any account". So **any GitHub user who installs the App and completes OAuth can get reviews that spend your AI budget**.
+  - Until this is gated, register the App for "Only on this account", or disable unknown repos in Projects.
+- The default GLM endpoint is the **Coding Plan** endpoint, which is against its terms for this use (see `docs/setup.md`). Use the pay-as-you-go endpoint if that risk matters to you.
+- The daily budget is **shown**, never **enforced**. There are no notifications (email or Slack) for budget alerts or failures, apart from the failure comment on the PR.
+
+**Runtime and scale**
+- **No durable queue.** Reviews run in-process via `after()`. If the process restarts mid-review, the reaper fails the run at the *next* webhook, and a restart during the 60-second retry wait loses that retry.
+- **Single instance.** The webhook and login rate limits live in memory and trust `x-forwarded-for`.
+- It is deployed on a VPS. On Vercel Hobby the 300-second function cap would kill long reviews. `docs/scaling.md` still describes the older Vercel setup.
+
+**Review behavior**
+- There is no auto-review on open or push, no `/review` comment command, and team review requests are ignored.
+- **Findings on unchanged context lines are discarded**, even when they are correct.
+- **Intent-match** (does the PR do what its description says) only works on single-chunk reviews.
+- **Non-blocking findings** go into a collapsible section of the review body, not inline, so they can't be replied to or tracked as resolved.
+- **Token counting is approximate**: `cl100k` plus per-provider multipliers, not each provider's own tokenizer.
+- **Hard caps:**
+  - 300 files per PR
+  - 20 commit messages
+  - PR body 1,000 chars in the prompt
+  - 20 previous findings carried into a re-review
+- **The scope guard is regex-based**, so it can downgrade a real finding, mostly on `chill` and `normal`.
+- **Retry coverage is uneven.** PR fetch, file listing and review submit have no HTTP retry. Only installation and user lookups back off, and the whole run is retried once as described above.
+
+**Stored but not used yet**
+- **Context files** can be configured per repo but are not read by the pipeline.
+- **The `usage_daily` rollup** is written but never read. The Usage page reads `ai_calls`, which expire after 30 days, so the 60- and 90-day views only show 30 days.
+- **`stats` and `timings`** on review requests are never filled in, so those panels stay empty.
+- **Queued follow-ups:** a review request that arrives while another is running only sets a flag, and no follow-up review is queued.
+- **Default review profile:** the one in Settings isn't applied to new repos; new repos always start on `chill`.
+- **Missing pricing:** Anthropic and OpenAI models have no seeded pricing, so their cost shows as $0 until you add rows in Settings.
+- **Anthropic:** its client has no retries and ignores the reasoning setting.
+
+---
+
+## Tech stack
+
+`Next.js 16` (App Router, Turbopack) · `React 19` · `TypeScript` · `MongoDB` (official driver) · `SWR` · `next-themes` · `zod` · argon2 · CSS Modules plus an in-house design system
+
+**Production:** a VPS (PM2 and nginx), deployed by GitHub Actions on every push to `main`. See [`docs/deploy.md`](./docs/deploy.md).
+
+---
+
+## Setup
+
+The full runbook is in **[`docs/setup.md`](./docs/setup.md)**. The essentials:
+
+### 1. Register a GitHub App
+
+**GitHub → Settings → Developer settings → GitHub Apps → New GitHub App**:
 
 | Field | Value |
 |---|---|
-| **GitHub App name** | anything, e.g. `my-pr-reviewer` |
-| **Homepage URL** | your `APP_URL` |
-| **Callback URL** | `https://your-app.vercel.app/api/github/callback` |
-| **Request user authorization (OAuth) during installation** | ✅ **ON** (this is what lets reviews post as *you*) |
-| **Webhook → Active** | ✅ ON |
-| **Webhook → URL** | `https://your-app.vercel.app/api/webhook` |
-| **Webhook → Secret** | generate a random string → this is `GITHUB_WEBHOOK_SECRET` |
-| **Permissions → Pull requests** | **Read & write** |
-| **Permissions → Contents** | **Read-only** |
-| **Permissions → Metadata** | **Read-only** (mandatory) |
-| **Subscribe to events** | `Pull request`, `Installation target`, `Installation repositories` |
-| **Where can this be installed** | Any account |
-| **User-to-server token expiration** | ✅ ON (secure default: 8h token + 6-month refresh) |
+| Callback URL | `https://<your-host>/api/github/callback` |
+| Request user authorization (OAuth) during installation | **On**, so reviews post as the user |
+| User-to-server token expiration | **On** (required: the app refuses non-expiring tokens) |
+| Webhook URL | `https://<your-host>/api/webhook` |
+| Webhook secret | a random string → `GITHUB_WEBHOOK_SECRET` |
+| Permissions | Pull requests: read and write · Contents: read · Metadata: read |
+| Events | Pull request, Installation target, Installation repositories |
+| Where can this be installed | **Only on this account**, unless you need orgs (see [limitations](#limitations)) |
 
-</details>
+Then collect `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (shown once) and `GITHUB_WEBHOOK_SECRET`.
 
-**After clicking "Create GitHub App", collect these 5 values:**
+### 2. Environment
 
-| Token | Where to find it | Env var |
-|---|---|---|
-| **App ID** | top of the App's General page | `GITHUB_APP_ID` |
-| **App slug** | the URL: `github.com/apps/`**`<slug>`** | `GITHUB_APP_SLUG` |
-| **Client ID** | General page, under "Client ID" | `GITHUB_CLIENT_ID` |
-| **Client secret** | click **"Generate a new client secret"** → copy immediately (shown once) | `GITHUB_CLIENT_SECRET` |
-| **Webhook secret** | the random string you set above | `GITHUB_WEBHOOK_SECRET` |
+Set these as environment variables (names only; never commit real values):
 
-> ⚠️ The **client secret** is shown **only once** — copy it right away. If you lose it, generate a new one (the old one keeps working until you delete it).
+| Group | Variables |
+|---|---|
+| Required | `MONGODB_URI`, `TOKEN_ENCRYPTION_KEY` (`openssl rand -base64 32`), `SESSION_SECRET` (≥ 32 chars) |
+| GitHub | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET` |
+| Optional | `MONGODB_DB_NAME`, `APP_URL`, `CRON_SECRET`, `GLM_API_KEY`, `GLM_BASE_URL`, `KIMI_API_KEY`, `KIMI_BASE_URL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` |
+| Seed only | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` |
 
-### Step 3 — Generate app secrets
-
-```bash
-openssl rand -base64 32   # → TOKEN_ENCRYPTION_KEY  (encrypts GitHub tokens at rest)
-openssl rand -base64 32   # → SESSION_SECRET        (dashboard sessions)
-openssl rand -base64 32   # → CRON_SECRET           (authorizes the usage-rollup cron)
-```
-
-### Step 4 — Set environment variables
-
-In **Vercel → Project → Settings → Environment Variables** (and a local `.env` for dev):
-
-```env
-# Database
-MONGODB_URI=mongodb+srv://...
-MONGODB_DB_NAME=pr_reviewer
-
-# GitHub App (from Step 2)
-GITHUB_APP_ID=...
-GITHUB_APP_SLUG=my-pr-reviewer
-GITHUB_CLIENT_ID=...
-GITHUB_CLIENT_SECRET=...
-GITHUB_WEBHOOK_SECRET=...
-
-# App secrets (from Step 3)
-TOKEN_ENCRYPTION_KEY=...
-SESSION_SECRET=...
-CRON_SECRET=...
-
-# Deployment
-APP_URL=https://your-app.vercel.app
-
-# AI provider (GLM is the default; others optional)
-GLM_API_KEY=...
-# KIMI_API_KEY=...
-# ANTHROPIC_API_KEY=...
-# OPENAI_API_KEY=...
-```
-
-### Step 5 — Seed the database (once)
-
-Creates the admin login, global settings, model pricing, and the 4 review-profile templates. Idempotent.
+### 3. Seed and verify
 
 ```bash
 pnpm install
-
-SEED_ADMIN_EMAIL="you@example.com" \
-SEED_ADMIN_PASSWORD="a-strong-password" \
-pnpm seed
+SEED_ADMIN_EMAIL="you@example.com" SEED_ADMIN_PASSWORD="a-strong-password" pnpm seed
+curl https://<your-host>/api/health   # → {"status":"ok","db":"connected"}
 ```
 
-### Step 6 — Verify
+`pnpm seed` creates the indexes, the admin login, the default settings (GLM, `glm-5.2`), model pricing and the four profile templates. You can run it again safely: it keeps existing keys, pricing and templates.
+
+---
+
+## Usage
+
+1. **Connect an account.** Sign in at `/login`, then go to **Projects → Connect GitHub account** and pick the repos.
+2. **Get a review.** On a PR in an enabled repo, **request review from the connected user** (not a team).
+3. **Follow up.** Push a fix or reply to a finding, then **re-request review**. The bot reads only the delta, or your replies.
+4. **If it fails.** It retries once by itself. If you then see "Automated review could not be completed" on the PR, check the request in the dashboard and use **Retry review**.
+
+---
+
+## Scripts
 
 ```bash
-curl https://your-app.vercel.app/api/health
-# → { "status": "ok", "db": "connected" }
-```
-
-✅ **Installed.** Now connect your GitHub account (see Usage below).
-
----
-
-## 📖 Usage
-
-### 1. Connect a GitHub account
-
-1. Open your app → **`/login`** → sign in with the seeded admin credentials.
-2. Go to **Projects → "Connect GitHub account"**.
-3. Pick the account + repositories in GitHub's native picker → done. Repos appear on the Projects page.
-
-> **Org repos:** if you're only a *member* (not owner), the install becomes a **pending request** — an org owner approves it in GitHub, and the repos sync automatically. See [`docs/setup.md`](./docs/setup.md#organization-repos-owner-approval).
-
-### 2. Get a PR reviewed
-
-On any PR in a connected + enabled repo:
-
-**Request review → pick the connected user** (e.g. `@your-github-user`, **not** a team) → the bot reviews within seconds and posts its verdict. That's it.
-
-```
-Author opens PR  →  requests review from @you  →  🤖 bot reviews & posts APPROVE / REQUEST_CHANGES / COMMENT
-```
-
-- ✏️ **Changed your mind after a finding?** Reply to the bot's comment explaining why → re-request review → the bot reads your reply and re-evaluates (can flip to APPROVE if your rebuttal holds).
-- 🔁 **Pushed a fix?** Re-request review → the bot reviews only the delta since its last review.
-
-### 3. Tune per repo
-
-**Projects → Configure** on a repo lets you set:
-
-| Setting | What it does |
-|---|---|
-| **Review profile** | `chill` (lenient mentor) → `expert` (principal-level strict) |
-| **AI provider / model** | override the global default per repo |
-| **Auto-verdict** | off = always COMMENT (never auto-approve/block) |
-| **Custom guidelines** | repo-specific rules injected into the prompt |
-| **Ignore patterns** | globs to skip (on top of built-in lockfile/generated filters) |
-
-### 4. Monitor
-
-| Page | Shows |
-|---|---|
-| **Dashboard** | reviews/day, cost this month, verdict mix, "needs attention" alerts |
-| **Requests** | every review request — author, repo, status, verdict, cost, duration (auto-refreshes every 5s) |
-| **AI Usage** | cost & token breakdown by model/repo/day + CSV export |
-| **Projects** | connected accounts, per-repo config, connection health |
-| **Settings** | default provider/model, provider API keys, model pricing, cost alerts |
-
----
-
-## 🧰 Scripts
-
-```bash
-pnpm dev            # local dev server
-pnpm build          # production build
-pnpm typecheck      # tsc --noEmit
-pnpm lint           # eslint
-pnpm test           # vitest
-pnpm seed           # seed admin + settings (idempotent)
-pnpm connect        # CLI: print the GitHub install URL
-pnpm set-profile <chill|normal|professional|expert>   # bulk-set review profile on all repos
-pnpm set-model <model> [--clear-overrides]            # set the global default model (e.g. glm-5.2)
+pnpm dev | build | start | lint | typecheck | test
+pnpm seed                                      # indexes, admin, defaults, pricing (safe to re-run)
+pnpm connect [--verify]                        # print the install URL / list connected users
+pnpm set-profile <chill|normal|professional|expert>   # set the profile on all repos and the default
+pnpm set-model <model> [--clear-overrides]     # set the default model (must have a pricing row)
+pnpm set-chunks [n]                            # set maxChunks on all repos (1–84, default 84)
 ```
 
 ---
 
-## 📚 More
+## More
 
-- **[`docs/deploy.md`](./docs/deploy.md)** — how this instance is deployed (VPS, GitHub Actions, PM2)
-- **[`docs/setup.md`](./docs/setup.md)** — full deployment runbook (MongoDB, Vercel, cron, org-approval flow)
-- **[`docs/scaling.md`](./docs/scaling.md)** — durability decisions & when to scale beyond Vercel Hobby
-- **`track-plans.md`** — the complete system design & architecture reference
+- [`docs/setup.md`](./docs/setup.md): full setup runbook (MongoDB, GitHub App, GLM endpoints, cron, the org approval flow)
+- [`docs/deploy.md`](./docs/deploy.md): how production is deployed (VPS, GitHub Actions, PM2, rollback)
+- [`docs/scaling.md`](./docs/scaling.md): durability decisions and when to add a queue
+- [`track-plans.md`](./track-plans.md): full system design and decision log
+- [`design-system/`](./design-system/): the UI kit the dashboard is built from
