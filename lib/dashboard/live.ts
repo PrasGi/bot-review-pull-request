@@ -13,9 +13,10 @@ import type {
 } from "@/lib/db/types";
 import {
   chunkCounts,
+  chunkPercent,
   isStalled,
-  progressPercent,
-  progressSteps,
+  oldestRunningChunk,
+  SLOW_CHUNK_MS,
   stepperItems,
   type StepState,
 } from "@/lib/review/progress";
@@ -45,7 +46,7 @@ export interface LiveRequest {
   path: ReviewPath | null;
   label: string;
   stageStartedAt: string | null;
-  steps: { done: number; total: number } | null;
+  /** Chunk review progress only; null outside the chunk stage of a full review. */
   percent: number | null;
   stepper: { stage: ReviewStage; label: string; state: StepState }[];
   files: { changed: number; kept: number; skipped: number } | null;
@@ -59,6 +60,8 @@ export interface LiveRequest {
     unreviewedFiles: number;
     lastFinishedAt: string | null;
   } | null;
+  oldestChunk: { number: number; startedAt: string } | null;
+  slowChunk: boolean;
   heartbeatAt: string | null;
   stalled: boolean;
   result: { verdict: Verdict; findings: number } | null;
@@ -66,9 +69,18 @@ export interface LiveRequest {
   cancelReason: string | null;
 }
 
+export interface LiveOther {
+  id: string;
+  repoFullName: string;
+  prNumber: number;
+  label: string;
+}
+
 export interface LiveResponse {
   focus: LiveRequest | null;
   othersRunning: number;
+  /** The other active reviews, so the page can switch focus to one of them. */
+  others: LiveOther[];
 }
 
 /** Oldest running first, then oldest queued: "the first request". */
@@ -108,8 +120,8 @@ export function toLiveRequest(
 ): LiveRequest {
   const progress = doc.progress;
   const finished = doc.status === "completed";
-  const steps = progressSteps(progress, finished);
   const chunks = progress?.chunks;
+  const oldest = progress?.stage === "reviewing" ? oldestRunningChunk(chunks) : null;
   return {
     id: doc._id.toHexString(),
     repoFullName,
@@ -126,8 +138,7 @@ export function toLiveRequest(
     label:
       doc.status === "queued" ? LIVE_COPY.queued : progress ? STAGE_LABEL[progress.stage] : STAGE_LABEL.preparing,
     stageStartedAt: iso(progress?.stageStartedAt),
-    steps,
-    percent: steps ? progressPercent(steps) : null,
+    percent: chunkPercent(progress, finished),
     stepper: stepperItems(progress, finished),
     files: progress?.files ?? null,
     chunks: chunks
@@ -138,6 +149,9 @@ export function toLiveRequest(
           lastFinishedAt: iso(chunks.lastFinishedAt),
         }
       : null,
+    oldestChunk: oldest ? { number: oldest.number, startedAt: oldest.startedAt.toISOString() } : null,
+    slowChunk:
+      doc.status === "processing" && oldest !== null && now.getTime() - oldest.startedAt.getTime() > SLOW_CHUNK_MS,
     heartbeatAt: iso(doc.heartbeatAt),
     stalled: doc.status === "processing" && isStalled(doc.heartbeatAt, now),
     result: review,
@@ -157,10 +171,14 @@ export async function getLiveReview(
   ]);
 
   const focus = pickFocus(active, requested, now);
-  if (!focus) return { focus: null, othersRunning: 0 };
+  if (!focus) return { focus: null, othersRunning: 0, others: [] };
 
-  const [repo, review] = await Promise.all([
-    reposCollection().then((c) => c.findOne({ _id: focus.repoId }, { projection: { fullName: 1 } })),
+  const others = orderActive(active).filter((r) => !r._id.equals(focus._id));
+  const repoIds = [focus.repoId, ...others.map((r) => r.repoId)];
+  const [repoDocs, review] = await Promise.all([
+    reposCollection().then((c) =>
+      c.find({ _id: { $in: repoIds } }, { projection: { fullName: 1 } }).toArray(),
+    ),
     focus.status === "completed"
       ? reviewsCollection().then((c) =>
           c.findOne({ requestId: focus._id }, { projection: { verdict: 1, findings: 1 } }),
@@ -168,13 +186,22 @@ export async function getLiveReview(
       : Promise.resolve(null),
   ]);
 
+  const nameById = new Map(repoDocs.map((r) => [r._id.toHexString(), r.fullName]));
+  const repoName = (id: ObjectId): string => nameById.get(id.toHexString()) ?? "unknown";
+
   return {
     focus: toLiveRequest(
       focus,
-      repo?.fullName ?? "unknown",
+      repoName(focus.repoId),
       review ? { verdict: review.verdict, findings: review.findings.length } : null,
       now,
     ),
-    othersRunning: active.filter((r) => !r._id.equals(focus._id)).length,
+    othersRunning: others.length,
+    others: others.map((r) => ({
+      id: r._id.toHexString(),
+      repoFullName: repoName(r.repoId),
+      prNumber: r.prNumber,
+      label: r.status === "queued" ? LIVE_COPY.queued : STAGE_LABEL[r.progress?.stage ?? "preparing"],
+    })),
   };
 }

@@ -4,16 +4,17 @@ import * as React from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { LiveIndicator } from '@/components/layout/Status';
 import { ErrorState } from '@/components/data/States';
 import { ProgressBar } from '@/components/data/ProgressBar';
-import type { LiveRequest, LiveResponse } from '@/lib/dashboard/live';
+import type { LiveOther, LiveRequest, LiveResponse } from '@/lib/dashboard/live';
 import { formatElapsed } from '@/lib/review/progress';
 import { LIVE_COPY as COPY } from '@/lib/review/progress-copy';
 import { fetcher, FetchError } from '@/lib/ui/swr';
-import { verdictTone } from '@/lib/ui/tones';
+import { verdictTone, type Tone } from '@/lib/ui/tones';
 import styles from './LiveReview.module.css';
 
 const RESULT_MS = 60_000;
@@ -35,33 +36,94 @@ function useNow(): number {
 const since = (iso: string | null, now: number): string | null =>
   iso ? formatElapsed(now - new Date(iso).getTime()) : null;
 
-function ResultLine({ focus }: { focus: LiveRequest }): React.ReactElement {
-  const duration = focus.startedAt && focus.finishedAt
-    ? formatElapsed(new Date(focus.finishedAt).getTime() - new Date(focus.startedAt).getTime())
-    : '—';
+/** The result line of a finished review, and the tone of its badge. */
+function resultOf(focus: LiveRequest): { text: string; tone: Tone } {
+  const duration =
+    focus.startedAt && focus.finishedAt
+      ? formatElapsed(new Date(focus.finishedAt).getTime() - new Date(focus.startedAt).getTime())
+      : '—';
   if (focus.status === 'completed') {
-    return focus.result ? (
-      <Badge variant={verdictTone(focus.result.verdict)}>
-        {COPY.result.completed(focus.result.verdict, focus.result.findings, duration)}
-      </Badge>
-    ) : (
-      <Badge variant="success">{COPY.result.completedNoReview(duration)}</Badge>
-    );
+    return focus.result
+      ? {
+          text: COPY.result.completed(focus.result.verdict, focus.result.findings, duration),
+          tone: verdictTone(focus.result.verdict),
+        }
+      : { text: COPY.result.completedNoReview(duration), tone: 'success' };
   }
-  if (focus.status === 'failed') {
-    return <Badge variant="error">{COPY.result.failed(focus.error ?? 'unknown error')}</Badge>;
-  }
-  return <Badge variant="neutral">{COPY.result.cancelled(focus.cancelReason ?? focus.status.replace(/_/g, ' '))}</Badge>;
+  if (focus.status === 'failed') return { text: COPY.result.failed(focus.error ?? 'unknown error'), tone: 'error' };
+  return { text: COPY.result.cancelled(focus.cancelReason ?? focus.status.replace(/_/g, ' ')), tone: 'neutral' };
 }
 
-function FocusCard({ focus, othersRunning, now }: { focus: LiveRequest; othersRunning: number; now: number }): React.ReactElement {
+function Warning({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <div className="prr-attn prr-attn--warning">
+      <span className="prr-attn-icon" aria-hidden="true">
+        <Icon name="alert" />
+      </span>
+      <div className="prr-attn-body">
+        <p className="prr-hint">{children}</p>
+      </div>
+    </div>
+  );
+}
+
+function OtherReviews({ others, onFollow }: { others: LiveOther[]; onFollow: (id: string) => void }): React.ReactElement {
+  const [open, setOpen] = React.useState(false);
+  const listId = React.useId();
+  return (
+    <div className={styles.others}>
+      <Button variant="ghost" size="sm" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
+        {COPY.moreRunning(others.length)}
+        <Icon name="chevronDown" size={14} />
+      </Button>
+      {open && (
+        <ul id={listId} className={styles.otherList} aria-label={COPY.switchTo}>
+          {others.map((other) => (
+            <li key={other.id}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setOpen(false);
+                  onFollow(other.id);
+                }}
+              >
+                <code>
+                  {other.repoFullName}#{other.prNumber}
+                </code>
+                <span className="prr-hint">{other.label}</span>
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+type FocusCardProps = {
+  focus: LiveRequest;
+  others: LiveOther[];
+  now: number;
+  onFollow: (id: string) => void;
+};
+
+function FocusCard({ focus, others, now, onFollow }: FocusCardProps): React.ReactElement {
   const active = isActive(focus.status);
-  const stageFor = since(focus.stageStartedAt, now);
-  const steps = focus.steps;
+  const result = active ? null : resultOf(focus);
+  const chunks = focus.chunks;
+  const inReview = active && focus.stage === 'reviewing';
+  const settled = chunks ? (focus.percent === 100 ? chunks.total : chunks.done + chunks.failed) : 0;
+  const oldestFor = focus.oldestChunk ? since(focus.oldestChunk.startedAt, now) : null;
   const heartbeatAgo = since(focus.heartbeatAt, now);
 
   return (
-    <Card className={styles.card} aria-live="polite">
+    <Card className={styles.card}>
+      {/* Only stage changes and the result are announced; timers and counters are not. */}
+      <p className="prr-sr" aria-live="polite">
+        {result ? result.text : focus.label}
+      </p>
+
       <div className={styles.head}>
         <div className={styles.title}>
           <code className={styles.repo}>
@@ -74,46 +136,47 @@ function FocusCard({ focus, othersRunning, now }: { focus: LiveRequest; othersRu
         </div>
         <div className={styles.badges}>
           <Badge variant="neutral">{focus.kind === 're_review' ? COPY.kind.re_review : COPY.kind.initial}</Badge>
-          {othersRunning > 0 && <Badge variant="info">{COPY.moreRunning(othersRunning)}</Badge>}
+          {others.length > 0 && <OtherReviews others={others} onFollow={onFollow} />}
         </div>
       </div>
 
       <div className={styles.action}>
-        {active ? (
+        {result ? (
+          <Badge variant={result.tone}>{result.text}</Badge>
+        ) : (
           <>
             <LiveIndicator label={focus.label} ariaLabel="Current review action" />
-            {stageFor && <span className="prr-hint">{COPY.forDuration(stageFor)}</span>}
+            {focus.stageStartedAt && (
+              <span className="prr-hint">{COPY.forDuration(since(focus.stageStartedAt, now) ?? '0s')}</span>
+            )}
           </>
-        ) : (
-          <ResultLine focus={focus} />
         )}
         <Link href={`/requests/${focus.id}`} className={`prr-link ${styles.open}`}>
           {COPY.openRequest}
         </Link>
       </div>
 
-      {focus.status !== 'queued' && (
+      {chunks && focus.percent !== null && (
         <div className={styles.progress}>
           <ProgressBar
             value={focus.percent}
-            label="Review progress"
-            valueText={steps && focus.percent !== null ? COPY.steps(steps.done, steps.total, focus.percent) : COPY.stepsUnknown}
+            label="Chunk review progress"
+            valueText={COPY.chunkBar(settled, chunks.total, focus.percent)}
           />
-          <span className={styles.nums}>
-            {steps && focus.percent !== null ? COPY.steps(steps.done, steps.total, focus.percent) : COPY.stepsUnknown}
-          </span>
+          <span className={styles.nums}>{COPY.chunkBar(settled, chunks.total, focus.percent)}</span>
         </div>
       )}
 
-      {active && (focus.files || focus.chunks) && (
+      {active && (focus.files || chunks) && (
         <ul className={styles.facts}>
           {focus.files && <li>{COPY.files(focus.files)}</li>}
-          {focus.chunks && focus.stage === 'reviewing' && <li>{COPY.chunks(focus.chunks)}</li>}
-          {focus.chunks?.lastFinishedAt && focus.stage === 'reviewing' && (
-            <li>{COPY.lastChunk(since(focus.chunks.lastFinishedAt, now) ?? '0s')}</li>
+          {chunks && inReview && <li>{COPY.chunks(chunks)}</li>}
+          {inReview && focus.oldestChunk && oldestFor && (
+            <li>{COPY.oldestChunk(focus.oldestChunk.number, oldestFor)}</li>
           )}
-          {focus.chunks && focus.chunks.repairs > 0 && <li>{COPY.repairs(focus.chunks.repairs)}</li>}
-          {focus.chunks && focus.chunks.unreviewedFiles > 0 && <li>{COPY.unreviewed(focus.chunks.unreviewedFiles)}</li>}
+          {chunks?.lastFinishedAt && inReview && <li>{COPY.lastChunk(since(chunks.lastFinishedAt, now) ?? '0s')}</li>}
+          {chunks && chunks.repairs > 0 && <li>{COPY.repairs(chunks.repairs)}</li>}
+          {chunks && chunks.unreviewedFiles > 0 && <li>{COPY.unreviewed(chunks.unreviewedFiles)}</li>}
         </ul>
       )}
 
@@ -129,23 +192,17 @@ function FocusCard({ focus, othersRunning, now }: { focus: LiveRequest; othersRu
         </ol>
       )}
 
-      {focus.stalled && heartbeatAgo && (
-        <div className="prr-attn prr-attn--warning">
-          <span className="prr-attn-icon" aria-hidden="true">
-            <Icon name="alert" />
-          </span>
-          <div className="prr-attn-body">
-            <p className="prr-hint">{COPY.stalled(heartbeatAgo)}</p>
-          </div>
-        </div>
+      {inReview && focus.slowChunk && focus.oldestChunk && oldestFor && (
+        <Warning>{COPY.slowChunk(focus.oldestChunk.number, oldestFor)}</Warning>
       )}
+      {focus.stalled && heartbeatAgo && <Warning>{COPY.stalled(heartbeatAgo)}</Warning>}
     </Card>
   );
 }
 
 /**
  * The review the bot is working on right now, above the requests table.
- * It follows one review until it finishes, shows the result briefly, then
+ * It follows one review until it finishes, shows the result for a minute, then
  * moves to the next running one. It renders nothing when none is running.
  */
 export function LiveReview(): React.ReactElement | null {
@@ -168,7 +225,7 @@ export function LiveReview(): React.ReactElement | null {
         }
         focusRef.current = focus.id;
         if (isActive(focus.status) || finishedRef.current === focus.id) return;
-        // Finished: keep it on screen briefly, then let the next poll pick the next review.
+        // Finished: keep it on screen for a minute, then let the next poll pick the next review.
         finishedRef.current = focus.id;
         window.setTimeout(() => {
           if (focusRef.current === focus.id) focusRef.current = null;
@@ -177,6 +234,14 @@ export function LiveReview(): React.ReactElement | null {
         }, RESULT_MS);
       },
     }
+  );
+
+  const follow = React.useCallback(
+    (id: string): void => {
+      focusRef.current = id;
+      void mutate();
+    },
+    [mutate]
   );
 
   if (error) {
@@ -199,7 +264,7 @@ export function LiveReview(): React.ReactElement | null {
       <h2 id="live-heading" className="prr-label">
         {COPY.heading}
       </h2>
-      <FocusCard focus={focus} othersRunning={data.othersRunning} now={now} />
+      <FocusCard focus={focus} others={data.others} now={now} onFollow={follow} />
     </section>
   );
 }

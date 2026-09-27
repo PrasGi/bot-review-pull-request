@@ -30,9 +30,9 @@ describe("createProgressReporter", () => {
 
   it("counts chunks with $inc so parallel chunks never race", async () => {
     const reporter = createProgressReporter(id);
-    await reporter.chunkStarted();
-    await reporter.chunkFinished(true);
-    await reporter.chunkFinished(false);
+    await reporter.chunkStarted(2);
+    await reporter.chunkFinished(2, true);
+    await reporter.chunkFinished(3, false);
     await reporter.chunkRepaired();
     const incs = updateOne.mock.calls.map((call) => (call[1] as { $inc: unknown }).$inc);
     expect(incs).toEqual([
@@ -41,6 +41,9 @@ describe("createProgressReporter", () => {
       { "progress.chunks.running": -1, "progress.chunks.failed": 1 },
       { "progress.chunks.repairs": 1 },
     ]);
+    const [start, finish] = updateOne.mock.calls.map((call) => call[1] as { $set: object; $unset?: object });
+    expect(start?.$set).toHaveProperty(["progress.chunks.startedAt.2"]);
+    expect(finish?.$unset).toEqual({ "progress.chunks.startedAt.2": "" });
   });
 
   it("never throws when a write fails", async () => {

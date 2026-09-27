@@ -24,37 +24,34 @@ export function pathStages(path: ReviewPath | undefined): ReviewStage[] {
   return path ? [...FIXED, ...TAIL[path]] : FIXED;
 }
 
-function chunkTotal(progress: ReviewProgress): number {
-  return progress.path === "full" ? (progress.chunks?.total ?? 0) : 0;
-}
+const AFTER_REVIEW: ReviewStage[] = ["finalizing", "posting", "saving"];
 
 /**
- * Completed steps out of the total. "reviewing" counts one step per chunk, and a
- * failed chunk is a finished step. Null until the path (and so the total) is known.
+ * The bar tracks chunk reviews only: the step that takes the time. Null when the
+ * run has no chunk stage (reply or empty path) or has not reached it yet.
  */
-export function progressSteps(
-  progress: ReviewProgress | undefined,
-  finished = false,
-): { done: number; total: number } | null {
-  if (!progress?.path) return null;
-  const stages = pathStages(progress.path);
-  const chunks = chunkTotal(progress);
-  const weight = (stage: ReviewStage): number => (stage === "reviewing" ? chunks : 1);
-  const total = stages.reduce((sum, stage) => sum + weight(stage), 0);
-  if (finished) return { done: total, total };
-
-  const current = stages.indexOf(progress.stage);
-  let done = stages.slice(0, Math.max(current, 0)).reduce((sum, stage) => sum + weight(stage), 0);
-  if (progress.stage === "reviewing") {
-    done += Math.min(chunks, (progress.chunks?.done ?? 0) + (progress.chunks?.failed ?? 0));
-  }
-  return { done, total };
+export function chunkPercent(progress: ReviewProgress | undefined, finished = false): number | null {
+  if (progress?.path !== "full") return null;
+  if (finished || AFTER_REVIEW.includes(progress.stage)) return 100;
+  if (progress.stage !== "reviewing" || !progress.chunks || progress.chunks.total <= 0) return null;
+  const settled = Math.min(progress.chunks.total, progress.chunks.done + progress.chunks.failed);
+  // Rounded down, so 100% only once every chunk has settled.
+  return Math.floor((settled / progress.chunks.total) * 100);
 }
 
-/** Rounded down, so the bar reaches 100% only when the run is really finished. */
-export function progressPercent(steps: { done: number; total: number }): number {
-  if (steps.total <= 0) return 0;
-  return Math.floor((steps.done / steps.total) * 100);
+/** GLM chunk calls measured p95 216 s; past this a running chunk is slower than usual. */
+export const SLOW_CHUNK_MS = 240_000;
+
+/** The chunk that has been running longest, with its 1-based number. */
+export function oldestRunningChunk(
+  chunks: ReviewProgressChunks | undefined,
+): { number: number; startedAt: Date } | null {
+  let oldest: { number: number; startedAt: Date } | null = null;
+  for (const [index, startedAt] of Object.entries(chunks?.startedAt ?? {})) {
+    const at = new Date(startedAt);
+    if (!oldest || at < oldest.startedAt) oldest = { number: Number(index) + 1, startedAt: at };
+  }
+  return oldest;
 }
 
 export type StepState = "done" | "current" | "pending";

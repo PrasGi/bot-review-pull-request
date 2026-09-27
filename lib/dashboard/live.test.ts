@@ -62,28 +62,38 @@ describe("toLiveRequest", () => {
         path: "full",
         stageStartedAt: ago(30_000),
         updatedAt: ago(5_000),
-        chunks: { total: 5, done: 2, failed: 0, running: 3, repairs: 1, unreviewedFiles: 0 },
+        chunks: {
+          total: 5,
+          done: 2,
+          failed: 0,
+          running: 3,
+          repairs: 1,
+          unreviewedFiles: 0,
+          startedAt: { "2": ago(300_000), "3": ago(20_000) },
+        },
       },
     });
     const live = toLiveRequest(doc, "o/r", null, now);
     expect(live).toMatchObject({
       repoFullName: "o/r",
       label: "Reviewing chunks",
-      steps: { done: 7, total: 13 },
-      percent: 53,
+      percent: 40,
       chunks: { done: 2, running: 3, waiting: 0, repairs: 1 },
+      oldestChunk: { number: 3, startedAt: ago(300_000).toISOString() },
+      slowChunk: true,
       stalled: true,
     });
   });
 
-  it("completes at 100% with the joined result", () => {
+  it("joins the result and shows no bar for a run without chunks", () => {
     const doc = request({
       status: "completed",
       finishedAt: ago(1_000),
       progress: { stage: "saving", path: "empty", stageStartedAt: ago(2_000), updatedAt: ago(2_000) },
     });
     const live = toLiveRequest(doc, "o/r", { verdict: "COMMENT", findings: 0 }, now);
-    expect(live.percent).toBe(100);
+    expect(live.percent).toBeNull();
+    expect(live.slowChunk).toBe(false);
     expect(live.result).toEqual({ verdict: "COMMENT", findings: 0 });
     expect(live.stalled).toBe(false);
   });

@@ -597,13 +597,13 @@ export async function runReviewPipeline(
     chunk: (typeof chunks)[number],
     index: number,
   ): Promise<ParsedChunk | null> => {
-    await progress.chunkStarted();
+    await progress.chunkStarted(index);
     try {
       const result = await runChunk(chunk, index);
-      await progress.chunkFinished(result !== null);
+      await progress.chunkFinished(index, result !== null);
       return result;
     } catch (error) {
-      await progress.chunkFinished(false);
+      await progress.chunkFinished(index, false);
       throw error;
     }
   };

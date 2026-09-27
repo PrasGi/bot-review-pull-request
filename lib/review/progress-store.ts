@@ -7,8 +7,8 @@ type StageExtra = Partial<Omit<ReviewProgress, "stage" | "stageStartedAt" | "upd
 
 export interface ProgressReporter {
   stage(stage: ReviewStage, extra?: StageExtra): Promise<void>;
-  chunkStarted(): Promise<void>;
-  chunkFinished(ok: boolean): Promise<void>;
+  chunkStarted(index: number): Promise<void>;
+  chunkFinished(index: number, ok: boolean): Promise<void>;
   chunkRepaired(): Promise<void>;
 }
 
@@ -50,13 +50,19 @@ export function createProgressReporter(requestId: ObjectId): ProgressReporter {
       }
       return write({ $set: set });
     },
-    chunkStarted: () =>
-      write({ $inc: { "progress.chunks.running": 1 }, $set: { "progress.updatedAt": new Date() } }),
-    chunkFinished: (ok) => {
+    chunkStarted: (index) => {
+      const now = new Date();
+      return write({
+        $inc: { "progress.chunks.running": 1 },
+        $set: { [`progress.chunks.startedAt.${index}`]: now, "progress.updatedAt": now },
+      });
+    },
+    chunkFinished: (index, ok) => {
       const now = new Date();
       return write({
         $inc: { "progress.chunks.running": -1, [ok ? "progress.chunks.done" : "progress.chunks.failed"]: 1 },
         $set: { "progress.chunks.lastFinishedAt": now, "progress.updatedAt": now },
+        $unset: { [`progress.chunks.startedAt.${index}`]: "" },
       });
     },
     chunkRepaired: () =>

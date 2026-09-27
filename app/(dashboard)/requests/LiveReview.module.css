@@ -107,3 +107,30 @@
 .step[data-state="done"] {
   color: var(--text);
 }
+
+.others {
+  position: relative;
+}
+
+.otherList {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  z-index: 3;
+  margin: 0;
+  padding: var(--space-2);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: max-content;
+  background: var(--surface);
+  border: var(--border-thick) solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.otherList button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}

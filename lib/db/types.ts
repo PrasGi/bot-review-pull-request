@@ -167,6 +167,8 @@ export interface ReviewProgressChunks {
   /** Files that did not fit the token budget and are not reviewed. */
   unreviewedFiles: number;
   lastFinishedAt?: Date;
+  /** Start time of each running chunk, keyed by chunk index; removed when it finishes. */
+  startedAt?: Record<string, Date>;
 }
 
 /** Live progress written by the pipeline while a request is processing. */

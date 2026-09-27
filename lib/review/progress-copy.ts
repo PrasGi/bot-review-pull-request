@@ -29,14 +29,20 @@ export const STEP_LABEL: Record<ReviewStage, string> = {
   saving: "Save",
 };
 
+const VERDICT_GLYPH: Record<string, string> = { APPROVE: "✓", REQUEST_CHANGES: "✕", COMMENT: "!" };
+
 export const LIVE_COPY = {
   heading: "Live review",
   queued: "Waiting to start",
   moreRunning: (n: number) => `+${n} more running`,
+  switchTo: "Follow another review",
   kind: { initial: "Initial review", re_review: "Re-review" },
   forDuration: (d: string) => `for ${d}`,
-  steps: (done: number, total: number, percent: number) => `${done} of ${total} steps · ${percent}%`,
-  stepsUnknown: "Counting steps…",
+  chunkBar: (settled: number, total: number, percent: number) =>
+    `${settled} of ${total} ${total === 1 ? "chunk" : "chunks"} · ${percent}%`,
+  oldestChunk: (n: number, elapsed: string) => `Oldest running chunk: #${n}, ${elapsed}`,
+  slowChunk: (n: number, elapsed: string) =>
+    `Chunk ${n} has been running ${elapsed}, slower than usual. It times out at 10m.`,
   chunks: (c: { done: number; running: number; waiting: number; failed: number; total: number }) =>
     [
       `${c.done} done`,
@@ -52,8 +58,9 @@ export const LIVE_COPY = {
   stalled: (ago: string) =>
     `No heartbeat for ${ago}. The run may be stuck; the reaper fails it after 5m.`,
   result: {
+    // The glyph follows the verdict, so a request for changes never reads as a tick.
     completed: (verdict: string, findings: number, duration: string) =>
-      `✓ ${verdict} · ${findings} ${findings === 1 ? "finding" : "findings"} · ${duration}`,
+      `${VERDICT_GLYPH[verdict] ?? "i"} ${verdict} · ${findings} ${findings === 1 ? "finding" : "findings"} · ${duration}`,
     completedNoReview: (duration: string) => `✓ Done · ${duration}`,
     failed: (reason: string) => `✕ Failed: ${reason}`,
     cancelled: (reason: string) => `Cancelled: ${reason}`,
