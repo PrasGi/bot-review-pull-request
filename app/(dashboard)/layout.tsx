@@ -11,7 +11,8 @@ export default async function DashboardLayout({
 }): Promise<React.ReactElement> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!(await validateSession(token))) {
-    redirect("/login");
+    // ?expired=1 tells proxy.ts to clear the invalid cookie instead of redirecting back here.
+    redirect("/login?expired=1");
   }
   return <AppShell>{children}</AppShell>;
 }

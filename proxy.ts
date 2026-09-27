@@ -28,6 +28,14 @@ export function proxy(request: NextRequest): NextResponse {
   }
 
   if (pathname === "/login" && hasSession) {
+    // The dashboard sends sessions that fail validation (expired, or signed with an old
+    // SESSION_SECRET) here with ?expired=1. Drop the stale cookie and show the login page;
+    // bouncing back to "/" would loop forever, since this check only sees that a cookie exists.
+    if (request.nextUrl.searchParams.has("expired")) {
+      const response = NextResponse.next();
+      response.cookies.delete(SESSION_COOKIE);
+      return response;
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
