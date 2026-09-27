@@ -72,8 +72,9 @@ function OtherReviews({ others, onFollow }: { others: LiveOther[]; onFollow: (id
   const listId = React.useId();
   return (
     <div className={styles.others}>
-      <Button variant="ghost" size="sm" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
-        {COPY.moreRunning(others.length)}
+      <Button variant="secondary" size="sm" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
+        <Icon name="refresh" size={14} />
+        {COPY.switchButton(others.length)}
         <Icon name="chevronDown" size={14} />
       </Button>
       {open && (

@@ -35,6 +35,7 @@ export const LIVE_COPY = {
   heading: "Live review",
   queued: "Waiting to start",
   moreRunning: (n: number) => `+${n} more running`,
+  switchButton: (n: number) => `Switch · +${n} more running`,
   switchTo: "Follow another review",
   kind: { initial: "Initial review", re_review: "Re-review" },
   forDuration: (d: string) => `for ${d}`,
