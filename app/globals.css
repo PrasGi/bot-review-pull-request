@@ -1,12 +1,6 @@
-/* Tailwind stays only until every page is migrated to the PR Reviewer kit. */
-@import "tailwindcss";
+/* PR Reviewer design system: tokens, then the component layer. Page styles live in CSS Modules. */
 @import "../styles/prr/tokens.css";
 @import "../styles/prr/components.css";
-
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
 /* next/font exposes hashed family names; point the kit's font tokens at them. */
 :root {
