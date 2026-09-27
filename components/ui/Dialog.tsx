@@ -1,88 +1,113 @@
 'use client';
 
 import * as React from 'react';
-import * as RadixDialog from '@radix-ui/react-dialog';
-import { X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/ui/cn';
 import { Button } from './Button';
 
-const Dialog = RadixDialog.Root;
-const DialogTrigger = RadixDialog.Trigger;
-const DialogClose = RadixDialog.Close;
+const FOCUSABLE =
+  'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-const DialogOverlay = React.forwardRef<
-  React.ComponentRef<typeof RadixDialog.Overlay>,
-  RadixDialog.DialogOverlayProps
->(({ className, ...props }, ref) => (
-  <RadixDialog.Overlay
-    ref={ref}
-    className={cn(
-      'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
-      'data-[state=open]:animate-in data-[state=closed]:animate-out',
-      'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-      className
-    )}
-    {...props}
-  />
-));
-DialogOverlay.displayName = 'DialogOverlay';
+type DialogProps = {
+  open: boolean;
+  onOpenChange?: (open: boolean) => void;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  showClose?: boolean;
+  role?: 'dialog' | 'alertdialog';
+  className?: string;
+  children?: React.ReactNode;
+};
 
-const DialogContent = React.forwardRef<
-  React.ComponentRef<typeof RadixDialog.Content>,
-  RadixDialog.DialogContentProps & { showClose?: boolean }
->(({ className, children, showClose = true, ...props }, ref) => (
-  <RadixDialog.Portal>
-    <DialogOverlay />
-    <RadixDialog.Content
-      ref={ref}
-      className={cn(
-        'glass-card fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 p-6',
-        'data-[state=open]:animate-in data-[state=closed]:animate-out',
-        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-        'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-        'data-[state=closed]:slide-out-to-left-1/2 data-[state=open]:slide-in-from-left-1/2',
-        'data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-top-[48%]',
-        className
-      )}
-      {...props}
+/** Modal dialog: traps focus, restores it on close, and treats Esc and the backdrop as cancel. */
+function Dialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  showClose = true,
+  role = 'dialog',
+  className,
+  children,
+}: DialogProps): React.ReactElement | null {
+  const box = React.useRef<HTMLDivElement>(null);
+  const titleId = React.useId();
+  const descId = React.useId();
+  const onOpenChangeRef = React.useRef(onOpenChange);
+  React.useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
+
+  React.useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const el = box.current;
+    const first = el?.querySelector<HTMLElement>(FOCUSABLE);
+    (first ?? el)?.focus();
+
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onOpenChangeRef.current?.(false);
+        return;
+      }
+      if (e.key !== 'Tab' || !el) return;
+      const items = el.querySelectorAll<HTMLElement>(FOCUSABLE);
+      const a = items[0];
+      const z = items[items.length - 1];
+      if (!a || !z) return;
+      if (e.shiftKey && document.activeElement === a) {
+        e.preventDefault();
+        z.focus();
+      } else if (!e.shiftKey && document.activeElement === z) {
+        e.preventDefault();
+        a.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previous?.focus?.();
+    };
+  }, [open]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className="prr-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onOpenChange?.(false);
+      }}
     >
-      {children}
-      {showClose && (
-        <RadixDialog.Close
-          className={cn(
-            'absolute right-4 top-4 rounded-md p-1 text-[var(--text-muted)]',
-            'hover:bg-[var(--nav-hover)] hover:text-[var(--text)] transition-colors',
-            'focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
-          )}
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </RadixDialog.Close>
-      )}
-    </RadixDialog.Content>
-  </RadixDialog.Portal>
-));
-DialogContent.displayName = 'DialogContent';
-
-function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): React.ReactElement {
-  return <div className={cn('mb-4 space-y-1', className)} {...props} />;
-}
-
-function DialogTitle({ className, ...props }: RadixDialog.DialogTitleProps): React.ReactElement {
-  return (
-    <RadixDialog.Title
-      className={cn('text-base font-semibold text-[var(--text)]', className)}
-      {...props}
-    />
-  );
-}
-
-function DialogDescription({ className, ...props }: RadixDialog.DialogDescriptionProps): React.ReactElement {
-  return (
-    <RadixDialog.Description
-      className={cn('text-sm text-[var(--text-muted)]', className)}
-      {...props}
-    />
+      <div
+        ref={box}
+        role={role}
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={description ? descId : undefined}
+        tabIndex={-1}
+        className={cn('prr-dialog', className)}
+      >
+        {title && (
+          <h2 id={titleId} className="prr-dialog-title">
+            {title}
+          </h2>
+        )}
+        {description && (
+          <p id={descId} className="prr-dialog-desc">
+            {description}
+          </p>
+        )}
+        {children}
+        {showClose && (
+          <button type="button" className="prr-icon-btn" aria-label="Close" onClick={() => onOpenChange?.(false)}>
+            ✕
+          </button>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -108,43 +133,27 @@ function ConfirmDialog({
   destructive = false,
   onConfirm,
   loading = false,
-}: ConfirmDialogProps): React.ReactElement {
+}: ConfirmDialogProps): React.ReactElement | null {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showClose={false}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <div className="flex justify-end gap-2 mt-6">
-          <Button
-            variant="secondary"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-          >
-            {cancelLabel}
-          </Button>
-          <Button
-            variant={destructive ? 'destructive' : 'primary'}
-            onClick={onConfirm}
-            loading={loading}
-          >
-            {confirmLabel}
-          </Button>
-        </div>
-      </DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      description={description}
+      showClose={false}
+      role="alertdialog"
+    >
+      <div className="prr-dialog-actions">
+        <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={loading}>
+          {cancelLabel}
+        </Button>
+        <Button variant={destructive ? 'destructive' : 'primary'} onClick={onConfirm} loading={loading}>
+          {confirmLabel}
+        </Button>
+      </div>
     </Dialog>
   );
 }
 
-export {
-  Dialog,
-  DialogTrigger,
-  DialogClose,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  ConfirmDialog,
-};
-export type { ConfirmDialogProps };
+export { Dialog, ConfirmDialog };
+export type { DialogProps, ConfirmDialogProps };

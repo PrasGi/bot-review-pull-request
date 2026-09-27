@@ -7,13 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Slider } from '@/components/ui/Slider';
 import { Switch } from '@/components/ui/Switch';
 import { Button } from '@/components/ui/Button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/Dialog';
+import { Dialog } from '@/components/ui/Dialog';
 import { mutateJson, FetchError } from '@/lib/ui/swr';
 import { toast } from '@/components/ui/Toast';
 
@@ -473,25 +467,22 @@ export function RepoConfigDialog({
   open,
   onOpenChange,
   onSaved,
-}: RepoConfigDialogProps): React.ReactElement {
+}: RepoConfigDialogProps): React.ReactElement | null {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Configure {repoFullName}</DialogTitle>
-          <DialogDescription>
-            Adjust review settings. Leave provider/model empty to inherit global defaults.
-          </DialogDescription>
-        </DialogHeader>
-        {open && (
-          <ConfigForm
-            repoId={repoId}
-            config={config}
-            onClose={() => onOpenChange(false)}
-            onSaved={onSaved}
-          />
-        )}
-      </DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Configure ${repoFullName}`}
+      description="Adjust review settings. Leave provider/model empty to inherit global defaults."
+    >
+      {open && (
+        <ConfigForm
+          repoId={repoId}
+          config={config}
+          onClose={() => onOpenChange(false)}
+          onSaved={onSaved}
+        />
+      )}
     </Dialog>
   );
 }

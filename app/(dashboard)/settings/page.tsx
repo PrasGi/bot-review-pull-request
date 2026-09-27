@@ -3,7 +3,7 @@
 import * as React from 'react';
 import useSWR from 'swr';
 import { Plus, Trash2 } from 'lucide-react';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 import { Input, PasswordInput } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
@@ -68,14 +68,14 @@ function LoadingSkeleton(): React.ReactElement {
   return (
     <div className="flex flex-col gap-6">
       {[1, 2, 3, 4].map((i) => (
-        <GlassCard key={i}>
+        <Card key={i}>
           <Skeleton className="h-5 w-40 mb-5" />
           <div className="flex flex-col gap-4">
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-32 ml-auto" />
           </div>
-        </GlassCard>
+        </Card>
       ))}
     </div>
   );
@@ -116,7 +116,7 @@ function DefaultsSection({
   };
 
   return (
-    <GlassCard>
+    <Card>
       <SectionHeading>Defaults</SectionHeading>
       <div className="flex flex-col gap-4">
         <Select
@@ -150,7 +150,7 @@ function DefaultsSection({
           </Button>
         </div>
       </div>
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -224,7 +224,7 @@ function ProviderKeysSection({
   onMutate: () => void;
 }): React.ReactElement {
   return (
-    <GlassCard>
+    <Card>
       <SectionHeading>Provider API Keys</SectionHeading>
       <p className="text-xs text-[var(--text-muted)] mb-4">
         Keys are write-only and never returned. Enter a new value to replace an existing key.
@@ -239,7 +239,7 @@ function ProviderKeysSection({
           />
         ))}
       </div>
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -312,7 +312,7 @@ function ModelPricingSection({
   };
 
   return (
-    <GlassCard>
+    <Card>
       <SectionHeading>Model Pricing</SectionHeading>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -399,7 +399,7 @@ function ModelPricingSection({
           Save pricing
         </Button>
       </div>
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -433,7 +433,7 @@ function CostAlertsSection({
   };
 
   return (
-    <GlassCard>
+    <Card>
       <SectionHeading>Cost Alerts</SectionHeading>
       <div className="flex flex-col gap-4">
         <Switch
@@ -469,7 +469,7 @@ function CostAlertsSection({
           </Button>
         </div>
       </div>
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -490,11 +490,11 @@ export default function SettingsPage(): React.ReactElement {
     return (
       <div className="px-4 py-6 max-w-3xl mx-auto">
         <h1 className="text-xl font-semibold text-[var(--text)] mb-6">Settings</h1>
-        <GlassCard>
+        <Card>
           <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
             {message}
           </p>
-        </GlassCard>
+        </Card>
       </div>
     );
   }

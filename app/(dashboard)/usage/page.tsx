@@ -16,7 +16,7 @@ import {
 } from 'recharts';
 import { Download } from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
@@ -77,18 +77,18 @@ function UsageSkeleton(): React.ReactElement {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <GlassCard key={i}>
+          <Card key={i}>
             <Skeleton className="mb-2 h-4 w-24" />
             <Skeleton className="h-8 w-32" />
-          </GlassCard>
+          </Card>
         ))}
       </div>
-      <GlassCard>
+      <Card>
         <Skeleton className="h-72 w-full" />
-      </GlassCard>
-      <GlassCard className="p-0">
+      </Card>
+      <Card className="p-0">
         <Skeleton className="h-64 w-full rounded-[var(--radius-card)]" />
-      </GlassCard>
+      </Card>
     </div>
   );
 }
@@ -101,12 +101,12 @@ function SummaryCard({
   value: string;
 }): React.ReactElement {
   return (
-    <GlassCard>
+    <Card>
       <p className="text-sm font-medium text-[var(--text-muted)]">{label}</p>
       <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--text)]">
         {value}
       </p>
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -146,7 +146,7 @@ function UsageChart({
   };
 
   return (
-    <GlassCard>
+    <Card>
       <h2
         id={labelId}
         className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]"
@@ -208,7 +208,7 @@ function UsageChart({
           )}
         </ResponsiveContainer>
       </div>
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -326,11 +326,11 @@ function UsageContent(): React.ReactElement {
       {isLoading && <UsageSkeleton />}
 
       {!isLoading && error && (
-        <GlassCard>
+        <Card>
           <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
             {errorMessage}
           </p>
-        </GlassCard>
+        </Card>
       )}
 
       {data && (
@@ -352,7 +352,7 @@ function UsageContent(): React.ReactElement {
             <UsageChart rows={data.rows} groupBy={groupBy} />
           )}
 
-          <GlassCard className="overflow-hidden p-0">
+          <Card className="overflow-hidden p-0">
             {data.rows.length === 0 ? (
               <div className="flex items-center justify-center py-16 text-sm text-[var(--text-muted)]">
                 No usage data for this period
@@ -392,7 +392,7 @@ function UsageContent(): React.ReactElement {
                 </table>
               </div>
             )}
-          </GlassCard>
+          </Card>
         </>
       )}
     </div>

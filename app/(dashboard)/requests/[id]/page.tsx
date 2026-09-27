@@ -7,7 +7,7 @@ import useSWR from 'swr';
 import { ExternalLink, ChevronLeft, RefreshCw } from 'lucide-react';
 import { fetcher, mutateJson, FetchError } from '@/lib/ui/swr';
 import { toast } from '@/components/ui/Toast';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -175,21 +175,21 @@ function DetailSkeleton(): React.ReactElement {
   return (
     <div className="flex flex-col gap-6 p-6">
       <Skeleton className="h-7 w-64" />
-      <GlassCard>
+      <Card>
         <div className="flex flex-col gap-3">
           <Skeleton className="h-5 w-48" />
           <Skeleton className="h-4 w-72" />
           <Skeleton className="h-4 w-56" />
         </div>
-      </GlassCard>
-      <GlassCard>
+      </Card>
+      <Card>
         <Skeleton className="h-5 w-32 mb-4" />
         <div className="flex flex-col gap-2">
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
           <Skeleton className="h-4 w-4/6" />
         </div>
-      </GlassCard>
+      </Card>
     </div>
   );
 }
@@ -224,7 +224,7 @@ export default function RequestDetailPage(): React.ReactElement {
     if (error.status === 404) {
       return (
         <div className="flex flex-col gap-6 p-6">
-          <GlassCard className="text-center py-12">
+          <Card className="text-center py-12">
             <p className="text-[var(--text-muted)] font-medium">Request not found</p>
             <p className="text-sm text-[var(--text-muted)] mt-1">
               This review request does not exist or you don&apos;t have access.
@@ -235,15 +235,15 @@ export default function RequestDetailPage(): React.ReactElement {
                 Back to requests
               </Button>
             </Link>
-          </GlassCard>
+          </Card>
         </div>
       );
     }
     return (
       <div className="flex flex-col gap-6 p-6">
-        <GlassCard className="text-center py-8">
+        <Card className="text-center py-8">
           <p className="text-sm text-[oklch(0.60_0.20_25)]">{error.message}</p>
-        </GlassCard>
+        </Card>
       </div>
     );
   }
@@ -306,7 +306,7 @@ export default function RequestDetailPage(): React.ReactElement {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <GlassCard>
+        <Card>
           <h2 className="text-sm font-semibold text-[var(--text)] mb-3">Details</h2>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             <dt className="text-[var(--text-muted)]">Created</dt>
@@ -340,10 +340,10 @@ export default function RequestDetailPage(): React.ReactElement {
               </>
             )}
           </dl>
-        </GlassCard>
+        </Card>
 
         {request.stats && (
-          <GlassCard>
+          <Card>
             <h2 className="text-sm font-semibold text-[var(--text)] mb-3">Stats</h2>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
               <dt className="text-[var(--text-muted)]">Files</dt>
@@ -363,11 +363,11 @@ export default function RequestDetailPage(): React.ReactElement {
                 </>
               )}
             </dl>
-          </GlassCard>
+          </Card>
         )}
 
         {request.timings && (
-          <GlassCard>
+          <Card>
             <h2 className="text-sm font-semibold text-[var(--text)] mb-3">Timings</h2>
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
               {request.timings.queuedMs !== undefined && (
@@ -395,23 +395,23 @@ export default function RequestDetailPage(): React.ReactElement {
                 </>
               )}
             </dl>
-          </GlassCard>
+          </Card>
         )}
       </div>
 
       {request.error && (
-        <GlassCard className="border border-[oklch(0.60_0.20_25/0.30)] bg-[oklch(0.60_0.20_25/0.05)]">
+        <Card className="border border-[oklch(0.60_0.20_25/0.30)] bg-[oklch(0.60_0.20_25/0.05)]">
           <h2 className="text-sm font-semibold text-[oklch(0.50_0.20_25)] mb-2">Error</h2>
           <p className="text-xs text-[var(--text-muted)] mb-1">Stage: <span className="font-mono">{request.error.stage}</span></p>
           <p className="text-sm text-[var(--text)]">{request.error.message}</p>
           {request.error.providerCode && (
             <p className="text-xs text-[var(--text-muted)] mt-1">Code: <span className="font-mono">{request.error.providerCode}</span></p>
           )}
-        </GlassCard>
+        </Card>
       )}
 
       {review && (
-        <GlassCard>
+        <Card>
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <h2 className="text-sm font-semibold text-[var(--text)]">AI Review</h2>
             <Badge variant={verdictVariant(review.verdict)}>{review.verdict.replace(/_/g, ' ')}</Badge>
@@ -466,11 +466,11 @@ export default function RequestDetailPage(): React.ReactElement {
               </ul>
             </div>
           )}
-        </GlassCard>
+        </Card>
       )}
 
       {aiCalls.length > 0 && (
-        <GlassCard className="p-0 overflow-hidden">
+        <Card className="p-0 overflow-hidden">
           <div className="p-4 border-b border-[var(--glass-border)]">
             <h2 className="text-sm font-semibold text-[var(--text)]">
               AI Calls ({aiCalls.length})
@@ -544,7 +544,7 @@ export default function RequestDetailPage(): React.ReactElement {
               </tbody>
             </table>
           </div>
-        </GlassCard>
+        </Card>
       )}
     </div>
   );

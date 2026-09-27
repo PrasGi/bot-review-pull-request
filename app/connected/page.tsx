@@ -1,7 +1,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Clock, GitPullRequest } from 'lucide-react';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 
 type ConnectedStatus = 'received' | 'pending';
 
@@ -48,7 +48,7 @@ export default async function ConnectedPage({
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12">
-      <GlassCard className="w-full max-w-md">
+      <Card className="w-full max-w-md">
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)]">
             <GitPullRequest
@@ -70,7 +70,7 @@ export default async function ConnectedPage({
             Go to PR Reviewer →
           </Link>
         </div>
-      </GlassCard>
+      </Card>
     </div>
   );
 }

@@ -1,14 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { Bell } from 'lucide-react';
 import { cn } from '@/lib/ui/cn';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-} from '@/components/ui/DropdownMenu';
+import { Icon } from '@/components/ui/Icon';
+import { Popover } from '@/components/ui/Popover';
 import { CHANGELOG, LATEST_VERSION } from '@/lib/changelog';
 
 const SEEN_KEY = 'pr-reviewer:changelog-seen';
@@ -48,83 +45,55 @@ function markSeen(): void {
 }
 
 function WhatsNew(): React.ReactElement {
-  const seenVersion = React.useSyncExternalStore(
-    subscribe,
-    readSeenVersion,
-    readSeenVersionOnServer,
-  );
+  const seenVersion = React.useSyncExternalStore(subscribe, readSeenVersion, readSeenVersionOnServer);
   const hasUnseen = seenVersion !== LATEST_VERSION;
 
   return (
-    <DropdownMenu
+    <Popover
+      align="end"
+      label="What's new"
+      className="prr-news"
       onOpenChange={(open) => {
         if (open) markSeen();
       }}
-    >
-      <DropdownMenuTrigger asChild>
+      trigger={
         <Button
           variant="ghost"
           size="icon"
+          className="prr-news-btn"
           aria-label={hasUnseen ? "What's new — unread updates" : "What's new"}
-          className="relative"
         >
-          <Bell className="h-5 w-5" />
-          {hasUnseen && (
-            <span
-              className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[oklch(0.70_0.18_45)] shadow-[0_0_0_2px_var(--surface)]"
-              aria-hidden="true"
-            />
-          )}
+          <Icon name="bell" size={18} />
+          {hasUnseen && <span className="prr-news-dot" aria-hidden="true" />}
         </Button>
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent
-        align="end"
-        className="w-[min(24rem,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto p-0"
-      >
-        <div className="sticky top-0 z-10 glass-panel rounded-none border-x-0 border-t-0 px-4 py-3">
-          <p className="text-sm font-semibold text-[var(--text)]">What&apos;s new</p>
-          <p className="text-xs text-[var(--text-muted)]">
-            Recent changes to the review pipeline
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-4 px-4 py-3">
-          {CHANGELOG.map((entry, index) => (
-            <section key={entry.version} className="flex flex-col gap-1.5">
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={cn(
-                    'text-xs font-semibold tabular-nums',
-                    index === 0 ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]',
-                  )}
-                >
-                  v{entry.version}
-                </span>
-                <span className="text-xs text-[var(--text-muted)]">{entry.date}</span>
-                {index === 0 && (
-                  <span className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--accent)] bg-[var(--nav-hover)]">
-                    Latest
-                  </span>
-                )}
-              </div>
-              <p className="text-sm font-medium text-[var(--text)]">{entry.title}</p>
-              <ul className="flex flex-col gap-1">
-                {entry.changes.map((change) => (
-                  <li
-                    key={change}
-                    className="flex gap-2 text-xs leading-relaxed text-[var(--text-muted)]"
-                  >
-                    <span aria-hidden="true">·</span>
-                    <span>{change}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      }
+    >
+      <div className="prr-news-head">
+        <p className="prr-news-title">What&apos;s new</p>
+        <p className="prr-hint">Recent changes to the review pipeline</p>
+      </div>
+      <div className="prr-news-body">
+        {CHANGELOG.map((entry, index) => (
+          <section key={entry.version} className="prr-news-entry">
+            <div className="prr-news-meta">
+              <span className={cn('prr-news-ver', index === 0 && 'is-latest')}>v{entry.version}</span>
+              <span>{entry.date}</span>
+              {index === 0 && (
+                <Badge variant="accent" style={{ marginLeft: 'auto' }}>
+                  Latest
+                </Badge>
+              )}
+            </div>
+            <p className="prr-news-entry-title">{entry.title}</p>
+            <ul className="prr-news-list">
+              {entry.changes.map((change) => (
+                <li key={change}>{change}</li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </Popover>
   );
 }
 

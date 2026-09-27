@@ -6,11 +6,11 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR from 'swr';
 import { ExternalLink } from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Select } from '@/components/ui/Select';
+import { Select, type SelectChangeEvent } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Tooltip } from '@/components/ui/Tooltip';
 
@@ -159,7 +159,7 @@ export default function RequestsPage(): React.ReactElement {
     }, 300);
   }
 
-  function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>): void {
+  function handleStatusChange(e: SelectChangeEvent): void {
     pushParams({ status: e.target.value });
   }
 
@@ -208,7 +208,7 @@ export default function RequestsPage(): React.ReactElement {
         </div>
       </div>
 
-      <GlassCard className="p-0 overflow-hidden">
+      <Card className="p-0 overflow-hidden">
         <div className="flex flex-wrap gap-3 items-end p-4 border-b border-[var(--glass-border)]">
           <Select
             label="Status"
@@ -382,7 +382,7 @@ export default function RequestsPage(): React.ReactElement {
             </div>
           </div>
         )}
-      </GlassCard>
+      </Card>
     </div>
   );
 }

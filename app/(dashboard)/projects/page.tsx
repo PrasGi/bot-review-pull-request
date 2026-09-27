@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR, { mutate as globalMutate } from 'swr';
 import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2, Search, Clock, RefreshCw } from 'lucide-react';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
@@ -116,7 +116,7 @@ function AccountCard({
   };
 
   return (
-    <GlassCard hoverLift className="flex flex-col gap-4">
+    <Card hoverLift className="flex flex-col gap-4">
       <div className="flex items-start gap-3">
         <AccountAvatar account={account} />
         <div className="flex-1 min-w-0">
@@ -171,7 +171,7 @@ function AccountCard({
           ))}
         </div>
       )}
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -179,7 +179,7 @@ function AccountsSkeleton(): React.ReactElement {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {[0, 1].map((i) => (
-        <GlassCard key={i}>
+        <Card key={i}>
           <div className="flex items-center gap-3 mb-4">
             <Skeleton className="h-10 w-10 rounded-full shrink-0" />
             <div className="flex-1 space-y-2">
@@ -191,7 +191,7 @@ function AccountsSkeleton(): React.ReactElement {
             <Skeleton className="h-6 w-20 rounded-full" />
             <Skeleton className="h-6 w-20 rounded-full" />
           </div>
-        </GlassCard>
+        </Card>
       ))}
     </div>
   );
@@ -248,15 +248,15 @@ function AccountsSection(): React.ReactElement {
       {isLoading && <AccountsSkeleton />}
 
       {error instanceof Error && (
-        <GlassCard>
+        <Card>
           <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
             {error instanceof FetchError ? error.message : 'Failed to load accounts'}
           </p>
-        </GlassCard>
+        </Card>
       )}
 
       {data && data.accounts.length === 0 && (
-        <GlassCard className="flex flex-col items-center gap-4 py-12 text-center">
+        <Card className="flex flex-col items-center gap-4 py-12 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-subtle)]">
             <FolderGit2 className="h-6 w-6 text-[var(--accent)]" aria-hidden="true" />
           </div>
@@ -272,7 +272,7 @@ function AccountsSection(): React.ReactElement {
               Connect GitHub account
             </a>
           </Button>
-        </GlassCard>
+        </Card>
       )}
 
       {data && data.accounts.length > 0 && (
@@ -442,7 +442,7 @@ function ReposSkeleton(): React.ReactElement {
   return (
     <div className="flex flex-col gap-4">
       {[0, 1].map((i) => (
-        <GlassCard key={i} className="flex flex-col gap-3">
+        <Card key={i} className="flex flex-col gap-3">
           <Skeleton className="h-4 w-28" />
           {[0, 1, 2].map((j) => (
             <div key={j} className="flex items-center gap-3 py-2">
@@ -452,7 +452,7 @@ function ReposSkeleton(): React.ReactElement {
               <Skeleton className="h-8 w-20 rounded-[var(--radius-btn)]" />
             </div>
           ))}
-        </GlassCard>
+        </Card>
       ))}
     </div>
   );
@@ -577,17 +577,17 @@ function ReposSection(): React.ReactElement {
       {isLoading && <ReposSkeleton />}
 
       {error instanceof Error && (
-        <GlassCard>
+        <Card>
           <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
             {error instanceof FetchError
               ? error.message
               : 'Failed to load repositories'}
           </p>
-        </GlassCard>
+        </Card>
       )}
 
       {data && data.repos.length === 0 && (
-        <GlassCard className="flex flex-col items-center gap-4 py-12 text-center">
+        <Card className="flex flex-col items-center gap-4 py-12 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-subtle)]">
             <GitFork className="h-6 w-6 text-[var(--accent)]" aria-hidden="true" />
           </div>
@@ -597,11 +597,11 @@ function ReposSection(): React.ReactElement {
               Connect an account and install the GitHub app to see repositories here.
             </p>
           </div>
-        </GlassCard>
+        </Card>
       )}
 
       {data && data.repos.length > 0 && filteredRepos.length === 0 && (
-        <GlassCard className="flex flex-col items-center gap-4 py-12 text-center">
+        <Card className="flex flex-col items-center gap-4 py-12 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-subtle)]">
             <Search className="h-6 w-6 text-[var(--accent)]" aria-hidden="true" />
           </div>
@@ -611,7 +611,7 @@ function ReposSection(): React.ReactElement {
               Try a different search term.
             </p>
           </div>
-        </GlassCard>
+        </Card>
       )}
 
       {data && filteredRepos.length > 0 && (

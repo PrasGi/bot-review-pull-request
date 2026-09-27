@@ -2,24 +2,30 @@
 
 import * as React from 'react';
 import { useTheme } from 'next-themes';
-import { Sun, Moon } from 'lucide-react';
+import { useMounted } from '@/lib/ui/use-mounted';
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { Tooltip } from '@/components/ui/Tooltip';
 
-function ThemeToggle(): React.ReactElement {
+type ThemeToggleProps = { tooltipSide?: 'top' | 'bottom' | 'right' };
+
+function ThemeToggle({ tooltipSide }: ThemeToggleProps): React.ReactElement {
   const { resolvedTheme, setTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
+  // The server cannot know the resolved theme; render the light-mode glyph until hydrated.
+  const mounted = useMounted();
+  const isDark = mounted && resolvedTheme === 'dark';
 
   return (
-    <Tooltip content="Toggle theme">
+    <Tooltip content="Toggle theme" side={tooltipSide}>
       <Button
         variant="ghost"
         size="icon"
         onClick={() => setTheme(isDark ? 'light' : 'dark')}
         aria-label={isDark ? 'Switch to light theme' : 'Switch to dark theme'}
-        suppressHydrationWarning
       >
-        {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        <span className="prr-theme-glyph" key={isDark ? 'dark' : 'light'}>
+          <Icon name={isDark ? 'sun' : 'moon'} />
+        </span>
       </Button>
     </Tooltip>
   );

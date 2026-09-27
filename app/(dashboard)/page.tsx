@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
 import { cn } from '@/lib/ui/cn';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
 
@@ -80,11 +80,11 @@ const TOOLTIP_STYLE = {
 
 function StatCardSkeleton(): React.ReactElement {
   return (
-    <GlassCard className="flex flex-col gap-3">
+    <Card className="flex flex-col gap-3">
       <Skeleton className="h-4 w-28" />
       <Skeleton className="h-8 w-20" />
       <Skeleton className="h-3 w-16" />
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -96,7 +96,7 @@ type StatCardProps = {
 
 function StatCard({ label, value, icon }: StatCardProps): React.ReactElement {
   return (
-    <GlassCard hoverLift className="flex flex-col gap-2">
+    <Card hoverLift className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[var(--text-muted)]">{label}</span>
         <span
@@ -107,7 +107,7 @@ function StatCard({ label, value, icon }: StatCardProps): React.ReactElement {
         </span>
       </div>
       <p className="tabular-nums text-3xl font-bold text-[var(--text)]">{value}</p>
-    </GlassCard>
+    </Card>
   );
 }
 
@@ -127,19 +127,19 @@ export default function DashboardPage(): React.ReactElement {
           <StatCardSkeleton />
         </div>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <GlassCard>
+          <Card>
             <Skeleton className="mb-4 h-5 w-36" />
             <Skeleton className="h-72 w-full rounded-lg" />
-          </GlassCard>
-          <GlassCard>
+          </Card>
+          <Card>
             <Skeleton className="mb-4 h-5 w-44" />
             <Skeleton className="h-72 w-full rounded-lg" />
-          </GlassCard>
+          </Card>
         </div>
-        <GlassCard>
+        <Card>
           <Skeleton className="mb-3 h-5 w-36" />
           <Skeleton className="h-16 w-full rounded-lg" />
-        </GlassCard>
+        </Card>
       </div>
     );
   }
@@ -149,7 +149,7 @@ export default function DashboardPage(): React.ReactElement {
       error instanceof FetchError ? error.message : 'Failed to load dashboard data';
     return (
       <div className="p-6">
-        <GlassCard role="alert">
+        <Card role="alert">
           <div className="flex items-center gap-3">
             <AlertTriangle
               className="h-5 w-5 shrink-0 text-[oklch(0.60_0.20_25)]"
@@ -160,7 +160,7 @@ export default function DashboardPage(): React.ReactElement {
               <p className="text-sm text-[var(--text-muted)]">{message}</p>
             </div>
           </div>
-        </GlassCard>
+        </Card>
       </div>
     );
   }
@@ -221,7 +221,7 @@ export default function DashboardPage(): React.ReactElement {
 
       {budgetAlert && (
         <section aria-label="Daily budget">
-          <GlassCard>
+          <Card>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-sm font-semibold text-[var(--text)]">
                 Daily Cost Budget
@@ -264,13 +264,13 @@ export default function DashboardPage(): React.ReactElement {
                 Daily spend has exceeded the configured budget.
               </p>
             )}
-          </GlassCard>
+          </Card>
         </section>
       )}
 
       <section aria-label="Charts">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <GlassCard>
+          <Card>
             <h2 className="mb-4 text-sm font-semibold text-[var(--text)]">Reviews per Day</h2>
             <div
               className="h-72"
@@ -305,9 +305,9 @@ export default function DashboardPage(): React.ReactElement {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
+          </Card>
 
-          <GlassCard>
+          <Card>
             <h2 className="mb-4 text-sm font-semibold text-[var(--text)]">
               Verdict Distribution
             </h2>
@@ -339,12 +339,12 @@ export default function DashboardPage(): React.ReactElement {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
+          </Card>
         </div>
       </section>
 
       <section aria-label="Needs attention">
-        <GlassCard>
+        <Card>
           <h2 className="mb-4 text-sm font-semibold text-[var(--text)]">Needs Attention</h2>
           {hasAttentionItems ? (
             <div className="flex flex-col gap-3">
@@ -460,7 +460,7 @@ export default function DashboardPage(): React.ReactElement {
               <span className="text-sm">All clear — no issues to address</span>
             </div>
           )}
-        </GlassCard>
+        </Card>
       </section>
     </main>
   );

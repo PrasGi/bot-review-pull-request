@@ -1,58 +1,27 @@
 'use client';
 
 import * as React from 'react';
-import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/ui/cn';
+import { FieldShell, assignRef, useFieldId, type FieldProps } from './Field';
 
-type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
-  label?: string;
-  error?: string;
-  containerClassName?: string;
-};
+type InputProps = React.InputHTMLAttributes<HTMLInputElement> & FieldProps;
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  (
-    { className, label, error, id, containerClassName, ...props },
-    ref
-  ): React.ReactElement => {
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
-    const errorId = inputId ? `${inputId}-error` : undefined;
+  ({ label, hint, error, containerClassName, className, id, ...props }, ref) => {
+    const fieldId = useFieldId(id, label);
     return (
-      <div className={cn('flex flex-col gap-1.5', containerClassName)}>
-        {label && (
-          <label
-            htmlFor={inputId}
-            className="text-sm font-medium text-[var(--text)]"
-          >
-            {label}
-          </label>
+      <FieldShell fieldId={fieldId} label={label} hint={hint} error={error} containerClassName={containerClassName}>
+        {(describedBy) => (
+          <input
+            ref={ref}
+            id={fieldId}
+            className={cn('prr-field', className)}
+            aria-invalid={!!error}
+            aria-describedby={describedBy}
+            {...props}
+          />
         )}
-        <input
-          ref={ref}
-          id={inputId}
-          aria-describedby={error ? errorId : undefined}
-          aria-invalid={!!error}
-          className={cn(
-            'glass-btn flex h-10 w-full px-3 py-2 text-sm text-[var(--text)]',
-            'placeholder:text-[var(--text-muted)]',
-            'focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-0',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            'transition-shadow',
-            error && 'outline outline-2 outline-[oklch(0.60_0.20_25)]',
-            className
-          )}
-          {...props}
-        />
-        {error && (
-          <p
-            id={errorId}
-            className="text-xs text-[oklch(0.60_0.20_25)]"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
-      </div>
+      </FieldShell>
     );
   }
 );
@@ -61,65 +30,84 @@ Input.displayName = 'Input';
 type PasswordInputProps = Omit<InputProps, 'type'>;
 
 const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
-  ({ className, label, error, id, containerClassName, ...props }, ref): React.ReactElement => {
+  ({ label, hint, error, containerClassName, className, id, ...props }, ref) => {
+    const fieldId = useFieldId(id, label);
     const [visible, setVisible] = React.useState(false);
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
-    const errorId = inputId ? `${inputId}-error` : undefined;
     return (
-      <div className={cn('flex flex-col gap-1.5', containerClassName)}>
-        {label && (
-          <label
-            htmlFor={inputId}
-            className="text-sm font-medium text-[var(--text)]"
-          >
-            {label}
-          </label>
+      <FieldShell fieldId={fieldId} label={label} hint={hint} error={error} containerClassName={containerClassName}>
+        {(describedBy) => (
+          <div className="prr-pw">
+            <input
+              ref={ref}
+              id={fieldId}
+              type={visible ? 'text' : 'password'}
+              className={cn('prr-field', className)}
+              aria-invalid={!!error}
+              aria-describedby={describedBy}
+              {...props}
+            />
+            <button
+              type="button"
+              className="prr-pw-toggle"
+              onClick={() => setVisible((v) => !v)}
+              aria-label={visible ? 'Hide password' : 'Show password'}
+            >
+              {visible ? 'Hide' : 'Show'}
+            </button>
+          </div>
         )}
-        <div className="relative">
-          <input
-            ref={ref}
-            id={inputId}
-            type={visible ? 'text' : 'password'}
-            aria-describedby={error ? errorId : undefined}
-            aria-invalid={!!error}
-            className={cn(
-              'glass-btn flex h-10 w-full px-3 py-2 pr-10 text-sm text-[var(--text)]',
-              'placeholder:text-[var(--text-muted)]',
-              'focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-0',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              'transition-shadow',
-              error && 'outline outline-2 outline-[oklch(0.60_0.20_25)]',
-              className
-            )}
-            {...props}
-          />
-          <button
-            type="button"
-            onClick={() => setVisible((v) => !v)}
-            aria-label={visible ? 'Hide password' : 'Show password'}
-            className={cn(
-              'absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded',
-              'text-[var(--text-muted)] hover:text-[var(--text)] transition-colors',
-              'focus-visible:outline-2 focus-visible:outline-[var(--accent)]'
-            )}
-          >
-            {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-        {error && (
-          <p
-            id={errorId}
-            className="text-xs text-[oklch(0.60_0.20_25)]"
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
-      </div>
+      </FieldShell>
     );
   }
 );
 PasswordInput.displayName = 'PasswordInput';
 
-export { Input, PasswordInput };
-export type { InputProps, PasswordInputProps };
+type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> &
+  FieldProps & {
+    minHeight?: number;
+  };
+
+/** Grows with its content; there is no resize grip. */
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ label, hint, error, containerClassName, className, id, minHeight = 96, onInput, value, ...props }, ref) => {
+    const fieldId = useFieldId(id, label);
+    const inner = React.useRef<HTMLTextAreaElement | null>(null);
+
+    const fit = React.useCallback(() => {
+      const el = inner.current;
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = `${Math.max(minHeight, el.scrollHeight + 4)}px`;
+    }, [minHeight]);
+
+    React.useLayoutEffect(fit, [fit, value]);
+
+    return (
+      <FieldShell fieldId={fieldId} label={label} hint={hint} error={error} containerClassName={containerClassName}>
+        {(describedBy) => (
+          <textarea
+            ref={(el) => {
+              inner.current = el;
+              assignRef(ref, el);
+            }}
+            id={fieldId}
+            rows={3}
+            className={cn('prr-field prr-textarea', className)}
+            aria-invalid={!!error}
+            aria-describedby={describedBy}
+            value={value}
+            onInput={(e) => {
+              fit();
+              onInput?.(e);
+            }}
+            {...props}
+          />
+        )}
+      </FieldShell>
+    );
+  }
+);
+Textarea.displayName = 'Textarea';
+
+export { Input, PasswordInput, Textarea };
+export type { InputProps, PasswordInputProps, TextareaProps };

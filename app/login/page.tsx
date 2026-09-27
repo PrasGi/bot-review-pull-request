@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { GitPullRequest } from 'lucide-react';
-import { GlassCard } from '@/components/ui/GlassCard';
+import { Card } from '@/components/ui/Card';
 import { Input, PasswordInput } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { mutateJson, FetchError } from '@/lib/ui/swr';
@@ -33,7 +33,7 @@ export default function LoginPage(): React.ReactElement {
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 py-12">
-      <GlassCard className="w-full max-w-sm">
+      <Card className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)]">
             <GitPullRequest
@@ -78,7 +78,7 @@ export default function LoginPage(): React.ReactElement {
             Sign in
           </Button>
         </form>
-      </GlassCard>
+      </Card>
     </div>
   );
 }
