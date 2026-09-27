@@ -3,7 +3,7 @@ import {
   reviewRequestsCollection,
   reviewsCollection,
 } from "@/lib/db/collections";
-import type { ReviewRequestDoc, ReviewKind } from "@/lib/db/types";
+import type { ReviewRequestDoc, ReviewKind, ReviewTrigger } from "@/lib/db/types";
 
 export type RetryResult =
   | { ok: true; requestId: string }
@@ -14,7 +14,18 @@ export async function retryRequest(id: string): Promise<RetryResult> {
   const requests = await reviewRequestsCollection();
   const original = await requests.findOne({ _id: new ObjectId(id) });
   if (!original) return { ok: false, reason: "not_found" };
+  return createRetryRequest(original, "manual_retry");
+}
 
+/**
+ * Queues a copy of `original` for another run. Refuses while another run for the
+ * same PR is queued or processing, since that run already covers the PR.
+ */
+export async function createRetryRequest(
+  original: ReviewRequestDoc,
+  trigger: Extract<ReviewTrigger, "manual_retry" | "auto_retry">,
+): Promise<RetryResult> {
+  const requests = await reviewRequestsCollection();
   const active = await requests.findOne({
     repoId: original.repoId,
     prNumber: original.prNumber,
@@ -44,7 +55,7 @@ export async function retryRequest(id: string): Promise<RetryResult> {
     headSha: original.headSha,
     baseSha: original.baseSha,
     kind,
-    trigger: "manual_retry",
+    trigger,
     status: "queued",
     createdAt: now,
   };

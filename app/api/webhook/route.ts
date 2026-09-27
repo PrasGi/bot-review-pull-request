@@ -10,6 +10,7 @@ import {
 import { evaluatePullRequestEvent } from "@/lib/webhook/trigger-matrix";
 import { reapStuckRequests } from "@/lib/review/reaper";
 import { runReviewRequest } from "@/lib/review/runner";
+import { handleRequestFailure } from "@/lib/review/failure";
 import type {
   InstallationEvent,
   InstallationRepositoriesEvent,
@@ -58,7 +59,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ status: "malformed_json" }, { status: 400 });
   }
 
-  await reapStuckRequests();
+  const reaped = await reapStuckRequests();
+  if (reaped.length > 0) {
+    // Retry-then-comment can wait a minute; never hold the webhook response for it.
+    after(async () => {
+      await Promise.all(reaped.map((id) => handleRequestFailure(id)));
+    });
+  }
 
   if (event === "installation") {
     await handleInstallationEvent(payload as InstallationEvent);

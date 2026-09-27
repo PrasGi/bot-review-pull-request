@@ -152,3 +152,21 @@ export async function submitReview(
   }
   return { githubReviewId: summaryOnly.data.id, inlinePosted: false };
 }
+
+/** Posts a plain conversation comment on the PR (the issues API), as the token's user. */
+export async function postIssueComment(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: string,
+): Promise<void> {
+  const result = await ghRequest<{ id: number }>(
+    `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    token,
+    { method: "POST", body: JSON.stringify({ body }) },
+  );
+  if (!result.ok) {
+    throw new Error(`post issue comment failed: ${result.status}`);
+  }
+}

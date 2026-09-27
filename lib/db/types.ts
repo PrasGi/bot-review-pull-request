@@ -18,6 +18,7 @@ export type ReviewTrigger =
   | "review_requested"
   | "ready_for_review"
   | "manual_retry"
+  | "auto_retry"
   | "follow_up";
 
 export type FindingSeverity = "critical" | "major" | "minor" | "nit";
@@ -150,6 +151,8 @@ export interface ReviewRequestDoc {
   error?: ReviewRequestError;
   newerCommitsFlag?: boolean;
   reReviewRequestedFlag?: boolean;
+  /** Set once the "review could not be completed" comment was posted on the PR. */
+  failureNotifiedAt?: Date;
   stats?: ReviewRequestStats;
   timings?: ReviewRequestTimings;
   heartbeatAt?: Date;

@@ -156,3 +156,15 @@ export function buildReviewBody(input: SummaryInput): string {
 
   return parts.join("\n");
 }
+
+/**
+ * Posted on the PR when a review and its automatic retry both failed. It carries no
+ * error details: stored messages are raw provider output and may contain secrets.
+ */
+export function buildFailureComment(headSha: string): string {
+  return [
+    "> ⚠️ **Automated review could not be completed.**",
+    `> The review system hit an internal error while reviewing \`${headSha.slice(0, 7)}\`, and an automatic retry failed as well, so no review was posted.`,
+    "> This is not a problem with the code in this PR. Re-request review to try again.",
+  ].join("\n");
+}

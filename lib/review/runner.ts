@@ -3,6 +3,7 @@ import { reviewRequestsCollection } from "@/lib/db/collections";
 import type { ReviewRequestDoc } from "@/lib/db/types";
 import { runReviewPipeline } from "@/lib/review/pipeline";
 import { PrClosedError } from "@/lib/review/errors";
+import { handleRequestFailure } from "@/lib/review/failure";
 import { log, errorFields } from "@/lib/logger";
 
 // The pipeline only heartbeats between stages, and a chunk wave can now hold it
@@ -29,14 +30,15 @@ async function markCompleted(requestId: ObjectId): Promise<void> {
   );
 }
 
+/** Returns true only for the caller that moved the request out of `processing`. */
 async function markFailed(
   requestId: ObjectId,
   stage: string,
   message: string,
-): Promise<void> {
+): Promise<boolean> {
   const requests = await reviewRequestsCollection();
-  await requests.updateOne(
-    { _id: requestId },
+  const result = await requests.updateOne(
+    { _id: requestId, status: "processing" },
     {
       $set: {
         status: "failed",
@@ -45,6 +47,7 @@ async function markFailed(
       },
     },
   );
+  return result.modifiedCount === 1;
 }
 
 async function markCancelled(
@@ -103,12 +106,14 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
       return;
     }
     const message = error instanceof Error ? error.message : "unknown";
-    await markFailed(requestId, "pipeline", message);
+    const transitioned = await markFailed(requestId, "pipeline", message);
     log.error("review.pipeline.failed", {
       requestId: requestIdHex,
       durationMs: Date.now() - startedAt,
       ...errorFields(error),
     });
+    // If the reaper already failed this run, it owns the follow-up.
+    if (transitioned) await handleRequestFailure(requestId);
   } finally {
     clearInterval(ticker);
   }

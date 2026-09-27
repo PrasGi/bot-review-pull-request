@@ -25,7 +25,7 @@ A webhook-driven bot that reviews GitHub Pull Requests using AI (multi-provider)
 | D10 | Charts | Recharts |
 | D11 | Sidebar | Collapsible → **icon rail (64px)** with tooltips; mobile → **off-canvas drawer** |
 | D12 | Draft PRs | **Skip** while draft; auto-review when `ready_for_review` fires |
-| D13 | Failure behavior | Silent on the PR; mark `failed` in dashboard + **manual retry button** |
+| D13 | Failure behavior | Mark `failed`, **auto-retry once** after 60s; if the retry fails too, post **one** neutral comment on the PR (no error details). Manual retry button stays. *(Revised 2026-09-27; was: silent on the PR.)* |
 | D14 | Push during review | Finish the in-flight review for the old SHA + append "newer commits exist" note; no auto-restart |
 | D15 | Language | ALL content (code, docs, UI copy, review comments posted to GitHub) in English |
 | D16 | Scale target | 2 GitHub accounts × ~3 repos each; multi-tenant data model from day one |
@@ -361,7 +361,13 @@ Step 8'. reviews doc gets previousReviewId → chain: R1 ← R2 ← R3 (dashboar
 Any pipeline error → catch at runner level:
   - review_requests: status="failed",
     error: { stage: "fetch|filter|ai|parse|submit", message, providerCode?, stack(dev only) }
-  - NOTHING posted to the PR (D13)
+  - D13 (revised): lib/review/failure.ts handleRequestFailure runs for every run that
+    transitioned to failed (runner, or reaper on a stale heartbeat):
+      · a reviews doc already exists for the request → nothing (review was posted)
+      · trigger != auto_retry → wait 60s, clone as trigger="auto_retry", run it
+        (skipped if another run for the PR is already active)
+      · trigger == auto_retry → claim failureNotifiedAt atomically, post one issue
+        comment: "Automated review could not be completed … Re-request review"
   - ai_calls already logged stay logged (cost is real even on failure)
 
 Auto-retry INSIDE a run (transient only):
