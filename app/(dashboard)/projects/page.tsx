@@ -21,6 +21,7 @@ import { RepoConfigDialog } from './RepoConfigDialog';
 import { InviteOrgDialog } from './InviteOrgDialog';
 import { INVITES_KEY, OwnerInvites } from './OwnerInvites';
 import { INVITE_DIALOG_COPY } from '@/lib/invites/copy';
+import { useDebouncedSearch } from '@/lib/ui/use-debounced-search';
 import { BulkConfigDialog } from './BulkConfigDialog';
 import { RepoFilters } from './RepoFilters';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -353,7 +354,6 @@ function ReposSection(): React.ReactElement {
   const q = filter.q;
   const rawPage = parseInt(searchParams.get('page') ?? '1', 10);
 
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data, error, isLoading, mutate } = useSWR<ReposResponse>(
     '/api/dashboard/repos',
@@ -389,13 +389,7 @@ function ReposSection(): React.ReactElement {
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>): void {
-    const val = e.target.value;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      pushParams({ q: val });
-    }, 300);
-  }
+  const searchInput = useDebouncedSearch(q, (value) => pushParams({ q: value }));
 
   function goToPage(next: number): void {
     const params = new URLSearchParams(searchParams.toString());
@@ -462,12 +456,11 @@ function ReposSection(): React.ReactElement {
         action={
           data && data.repos.length > 0 ? (
             <Input
-              key={q}
               id="repo-search"
               type="search"
               placeholder="Search repositories…"
-              defaultValue={q}
-              onChange={handleSearchChange}
+              value={searchInput.value}
+              onChange={searchInput.onChange}
               aria-label="Search repositories"
               containerClassName={styles.search}
             />

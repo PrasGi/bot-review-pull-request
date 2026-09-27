@@ -15,6 +15,7 @@ import { LiveIndicator } from '@/components/layout/Status';
 import { DataTable, type Column } from '@/components/data/DataTable';
 import { Pagination } from '@/components/data/Pagination';
 import { requestStatusTone, verdictTone } from '@/lib/ui/tones';
+import { useDebouncedSearch } from '@/lib/ui/use-debounced-search';
 import { LiveReview } from './LiveReview';
 import styles from './page.module.css';
 
@@ -203,7 +204,6 @@ export default function RequestsPage(): React.ReactElement {
   const status = searchParams.get('status') ?? '';
   const search = searchParams.get('search') ?? '';
 
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function pushParams(updates: Record<string, string>): void {
     const params = new URLSearchParams(searchParams.toString());
@@ -218,13 +218,7 @@ export default function RequestsPage(): React.ReactElement {
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>): void {
-    const val = e.target.value;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      pushParams({ search: val });
-    }, 300);
-  }
+  const searchInput = useDebouncedSearch(search, (value) => pushParams({ search: value }));
 
   function handleStatusChange(e: SelectChangeEvent): void {
     pushParams({ status: e.target.value });
@@ -288,12 +282,11 @@ export default function RequestsPage(): React.ReactElement {
               containerClassName={styles.statusField}
             />
             <Input
-              key={search}
               label="Search"
               type="search"
               placeholder="PR title, author, number…"
-              defaultValue={search}
-              onChange={handleSearchChange}
+              value={searchInput.value}
+              onChange={searchInput.onChange}
               containerClassName={styles.searchField}
             />
           </>
