@@ -1,15 +1,16 @@
 'use client';
 
 import * as React from 'react';
-import { cn } from '@/lib/ui/cn';
 import { Select } from '@/components/ui/Select';
-import { Input } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
+import { Icon } from '@/components/ui/Icon';
 import { Slider } from '@/components/ui/Slider';
 import { Switch } from '@/components/ui/Switch';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { mutateJson, FetchError } from '@/lib/ui/swr';
 import { toast } from '@/components/ui/Toast';
+import styles from './RepoConfigDialog.module.css';
 
 export type AuthorProfileRule = {
   login: string;
@@ -178,14 +179,6 @@ function formToConfig(form: FormState): Partial<RepoConfig> {
   };
 }
 
-const textareaClass = cn(
-  'glass-btn w-full px-3 py-2 text-sm text-[var(--text)] resize-none rounded-[var(--radius-btn)]',
-  'placeholder:text-[var(--text-muted)]',
-  'focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-0',
-  'disabled:cursor-not-allowed disabled:opacity-50',
-  'transition-shadow'
-);
-
 type ConfigFormProps = {
   repoId: string;
   config: RepoConfig;
@@ -226,10 +219,12 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
     }
   };
 
+  const guidelineCount = form.customGuidelines.length;
+
   return (
-    <div className="flex flex-col gap-5 mt-2">
+    <div className={styles.form}>
       <Select
-        label="AI Provider"
+        label="AI provider"
         value={form.provider}
         onChange={(e) => set('provider', e.target.value)}
         options={PROVIDER_OPTIONS}
@@ -245,7 +240,7 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
       />
 
       <Select
-        label="Review Profile"
+        label="Review profile"
         value={form.reviewProfile}
         onChange={(e) => {
           const val = e.target.value;
@@ -255,105 +250,89 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
         disabled={saving}
       />
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[var(--text)]">
-            Per-author Overrides
-          </span>
-          <span className="text-xs text-[var(--text-muted)]">
+      <fieldset className={styles.group}>
+        <div className={styles.groupHead}>
+          <legend className="prr-label">Per-author overrides</legend>
+          <code className={styles.count}>
             {form.authorProfiles.length}/{MAX_AUTHOR_PROFILES}
-          </span>
+          </code>
         </div>
-        <p className="text-xs text-[var(--text-muted)]">
-          Use the GitHub <strong>username</strong> (e.g. <code>aziz-yoco</code>) — not the
-          display name or email. Authors not listed here use the review profile above.
+        <p className="prr-hint">
+          Use the GitHub <strong>username</strong> (e.g. <code>aziz-yoco</code>) — not the display name or email.
+          Authors not listed here use the review profile above.
         </p>
 
-        {form.authorProfiles.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {form.authorProfiles.map((row, index) => (
-              <div key={row.id} className="flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <Input
-                    aria-label={`GitHub username for override ${index + 1}`}
-                    placeholder="github-username"
-                    value={row.login}
-                    onChange={(e) => {
-                      const login = e.target.value;
-                      set(
-                        'authorProfiles',
-                        form.authorProfiles.map((r) =>
-                          r.id === row.id ? { ...r, login } : r
-                        )
-                      );
-                    }}
-                    disabled={saving}
-                  />
-                </div>
-                <div className="w-[13rem] shrink-0">
-                  <Select
-                    aria-label={`Review profile for override ${index + 1}`}
-                    value={row.profile}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (!isReviewProfile(val)) return;
-                      set(
-                        'authorProfiles',
-                        form.authorProfiles.map((r) =>
-                          r.id === row.id ? { ...r, profile: val } : r
-                        )
-                      );
-                    }}
-                    options={PROFILE_OPTIONS}
-                    disabled={saving}
-                  />
-                </div>
-                <Button
-                  variant="secondary"
-                  onClick={() =>
-                    set(
-                      'authorProfiles',
-                      form.authorProfiles.filter((r) => r.id !== row.id)
-                    )
-                  }
-                  disabled={saving}
-                  aria-label={`Remove override for ${row.login.trim() || `row ${index + 1}`}`}
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
+        {form.authorProfiles.map((row, index) => (
+          <div key={row.id} className={styles.overrideRow}>
+            <Input
+              aria-label={`GitHub username for override ${index + 1}`}
+              placeholder="github-username"
+              value={row.login}
+              onChange={(e) => {
+                const login = e.target.value;
+                set(
+                  'authorProfiles',
+                  form.authorProfiles.map((r) => (r.id === row.id ? { ...r, login } : r))
+                );
+              }}
+              disabled={saving}
+              containerClassName="prr-grow"
+            />
+            <Select
+              aria-label={`Review profile for override ${index + 1}`}
+              value={row.profile}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!isReviewProfile(val)) return;
+                set(
+                  'authorProfiles',
+                  form.authorProfiles.map((r) => (r.id === row.id ? { ...r, profile: val } : r))
+                );
+              }}
+              options={PROFILE_OPTIONS}
+              disabled={saving}
+              containerClassName={styles.overrideProfile}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                set(
+                  'authorProfiles',
+                  form.authorProfiles.filter((r) => r.id !== row.id)
+                )
+              }
+              disabled={saving}
+              aria-label={`Remove override for ${row.login.trim() || `row ${index + 1}`}`}
+            >
+              <Icon name="x" />
+            </Button>
           </div>
-        )}
+        ))}
 
         <div>
           <Button
             variant="secondary"
-            onClick={() =>
-              set('authorProfiles', [...form.authorProfiles, makeAuthorRow()])
-            }
+            size="sm"
+            onClick={() => set('authorProfiles', [...form.authorProfiles, makeAuthorRow()])}
             disabled={saving || form.authorProfiles.length >= MAX_AUTHOR_PROFILES}
           >
+            <Icon name="plus" size={14} />
             Add override
           </Button>
         </div>
-      </div>
+      </fieldset>
 
       <Switch
-        label="Auto Verdict — post verdict automatically after review"
+        label="Auto verdict — post the verdict automatically after review"
         checked={form.autoVerdict}
         onCheckedChange={(checked) => set('autoVerdict', checked)}
         disabled={saving}
       />
 
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-[var(--text)]">Max Chunks</span>
-          <span className="text-sm tabular-nums text-[var(--accent)] font-medium">
-            {form.maxChunks}
-          </span>
-        </div>
+      <div className={styles.group}>
         <Slider
+          label="Max chunks"
           min={MIN_CHUNKS}
           max={MAX_CHUNKS}
           step={1}
@@ -362,93 +341,55 @@ function ConfigForm({ repoId, config, onClose, onSaved }: ConfigFormProps): Reac
             if (v !== undefined) set('maxChunks', v);
           }}
           disabled={saving}
-          aria-label="Max chunks"
         />
-        <div className="flex justify-between text-xs text-[var(--text-muted)]">
+        <div className={styles.scale}>
           <span>{MIN_CHUNKS} — minimal</span>
           <span>{MAX_CHUNKS} — thorough</span>
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label
-            htmlFor={`custom-guidelines-${repoId}`}
-            className="text-sm font-medium text-[var(--text)]"
-          >
-            Custom Guidelines
-          </label>
-          <span
-            className={cn(
-              'text-xs tabular-nums',
-              form.customGuidelines.length > 1800
-                ? 'text-[oklch(0.60_0.20_25)]'
-                : 'text-[var(--text-muted)]'
-            )}
-          >
-            {form.customGuidelines.length}/2000
-          </span>
-        </div>
-        <textarea
-          id={`custom-guidelines-${repoId}`}
-          rows={4}
-          value={form.customGuidelines}
-          onChange={(e) => set('customGuidelines', e.target.value)}
-          disabled={saving}
-          className={textareaClass}
-          placeholder="Additional review guidelines for this repository…"
-        />
-      </div>
+      <Textarea
+        id={`custom-guidelines-${repoId}`}
+        label="Custom guidelines"
+        hint={`${guidelineCount}/2000 characters`}
+        error={guidelineCount > 2000 ? `${guidelineCount}/2000 characters. Shorten it to save.` : undefined}
+        value={form.customGuidelines}
+        onChange={(e) => set('customGuidelines', e.target.value)}
+        disabled={saving}
+        placeholder="Additional review guidelines for this repository…"
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label
-            htmlFor={`ignore-patterns-${repoId}`}
-            className="text-sm font-medium text-[var(--text)]"
-          >
-            Ignore Patterns
-          </label>
-          <span className="text-xs text-[var(--text-muted)]">one per line · max 50</span>
-        </div>
-        <textarea
-          id={`ignore-patterns-${repoId}`}
-          rows={3}
-          value={form.ignorePatternsText}
-          onChange={(e) => set('ignorePatternsText', e.target.value)}
-          disabled={saving}
-          className={cn(textareaClass, 'font-mono text-xs')}
-          placeholder={'*.md\ndist/**\nnode_modules/**'}
-        />
-      </div>
+      <Textarea
+        id={`ignore-patterns-${repoId}`}
+        label="Ignore patterns"
+        hint="One per line, at most 50."
+        value={form.ignorePatternsText}
+        onChange={(e) => set('ignorePatternsText', e.target.value)}
+        disabled={saving}
+        className={styles.mono}
+        minHeight={80}
+        placeholder={'*.md\ndist/**\nnode_modules/**'}
+      />
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <label
-            htmlFor={`context-files-${repoId}`}
-            className="text-sm font-medium text-[var(--text)]"
-          >
-            Context Files
-          </label>
-          <span className="text-xs text-[var(--text-muted)]">one per line · max 20</span>
-        </div>
-        <textarea
-          id={`context-files-${repoId}`}
-          rows={3}
-          value={form.contextFilesText}
-          onChange={(e) => set('contextFilesText', e.target.value)}
-          disabled={saving}
-          className={cn(textareaClass, 'font-mono text-xs')}
-          placeholder={'ARCHITECTURE.md\ndocs/api.md'}
-        />
-      </div>
+      <Textarea
+        id={`context-files-${repoId}`}
+        label="Context files"
+        hint="One per line, at most 20."
+        value={form.contextFilesText}
+        onChange={(e) => set('contextFilesText', e.target.value)}
+        disabled={saving}
+        className={styles.mono}
+        minHeight={80}
+        placeholder={'ARCHITECTURE.md\ndocs/api.md'}
+      />
 
       {validationError && (
-        <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
+        <p className="prr-error" role="alert">
           {validationError}
         </p>
       )}
 
-      <div className="flex justify-end gap-2 pt-4 border-t border-[var(--glass-border)]">
+      <div className="prr-dialog-actions">
         <Button variant="secondary" onClick={onClose} disabled={saving}>
           Cancel
         </Button>
@@ -472,7 +413,12 @@ export function RepoConfigDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={`Configure ${repoFullName}`}
+      className={styles.dialog}
+      title={
+        <>
+          Configure <code>{repoFullName}</code>
+        </>
+      }
       description="Adjust review settings. Leave provider/model empty to inherit global defaults."
     >
       {open && (

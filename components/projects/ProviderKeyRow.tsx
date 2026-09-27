@@ -10,7 +10,8 @@ type ProviderKeyRowProps = {
   label?: string;
   isSet: boolean;
   saving?: boolean;
-  onSave: (value: string) => void;
+  /** Resolves true once the key is stored; the field clears only then. */
+  onSave: (value: string) => Promise<boolean>;
 };
 
 function ProviderKeyRow({ provider, label, isSet, saving = false, onSave }: ProviderKeyRowProps): React.ReactElement {
@@ -36,9 +37,8 @@ function ProviderKeyRow({ provider, label, isSet, saving = false, onSave }: Prov
           variant="secondary"
           loading={saving}
           disabled={!value.trim()}
-          onClick={() => {
-            onSave(value.trim());
-            setValue('');
+          onClick={async () => {
+            if (await onSave(value.trim())) setValue('');
           }}
         >
           Save key

@@ -1,0 +1,59 @@
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.confidence {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.summary {
+  margin: 0 0 var(--space-4);
+  line-height: 22px;
+}
+
+.intent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  padding: var(--space-3);
+  background: var(--bg);
+  border: var(--border-thin) solid var(--border);
+}
+
+.intent > :first-child {
+  flex: none;
+}
+
+.intent p {
+  margin: 0;
+}
+
+.findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The disclosure row belongs to the call above it: no rule between them. */
+.detailRow td {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.detailRow:hover {
+  background: transparent;
+}

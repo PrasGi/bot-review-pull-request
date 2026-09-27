@@ -1,0 +1,76 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 768px;
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.intro {
+  margin: 0 0 var(--space-2);
+}
+
+.pricingScroll {
+  overflow-x: auto;
+  /* Room for the fields' focus lift and shadow. */
+  padding: 4px 6px 6px 2px;
+}
+
+.pricing {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: var(--space-2) var(--space-2);
+  margin: calc(var(--space-2) * -1);
+}
+
+.pricing th {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.pricing td {
+  vertical-align: top;
+}
+
+.num {
+  text-align: right;
+}
+
+.numInput {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.providerCell {
+  min-width: 132px;
+}
+
+.modelCell {
+  min-width: 160px;
+}
+
+.priceCell {
+  min-width: 120px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: var(--border-thin) solid var(--border);
+}

@@ -1,0 +1,56 @@
+.statusField {
+  min-width: 180px;
+}
+
+.searchField {
+  flex: 1;
+  min-width: 200px;
+}
+
+.prCell {
+  max-width: 420px;
+  min-width: 0;
+}
+
+.prTitleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.prTitle {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.external {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text-muted);
+  border: var(--border-thin) solid transparent;
+}
+
+.external:hover {
+  color: var(--on-fill);
+  background: var(--highlight);
+  border-color: var(--border);
+}
+
+.external:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.repo {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}

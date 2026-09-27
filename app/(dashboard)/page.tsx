@@ -1,37 +1,20 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import useSWR from 'swr';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip as RTooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  CartesianGrid,
-} from 'recharts';
-import {
-  GitPullRequest,
-  Calendar,
-  DollarSign,
-  Timer,
-  AlertTriangle,
-  CheckCheck,
-  PlugZap,
-  Clock,
-  WifiOff,
-} from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
-import { cn } from '@/lib/ui/cn';
 import { Card } from '@/components/ui/Card';
+import { PageHeader, SectionHeading } from '@/components/layout/PageHeader';
+import { Grid } from '@/components/layout/Grid';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { BudgetMeter } from '@/components/dashboard/BudgetMeter';
+import { AttentionItem, AttentionList } from '@/components/dashboard/AttentionList';
+import { ErrorState } from '@/components/data/States';
+import { BarChart } from '@/components/charts/BarChart';
+import { DonutChart } from '@/components/charts/DonutChart';
+import { ChartCard } from '@/components/charts/ChartParts';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Badge } from '@/components/ui/Badge';
+import type { ChartTone } from '@/components/charts/tones';
 
 type DashboardStats = {
   reviewsToday: number;
@@ -49,15 +32,18 @@ type DashboardStats = {
   budgetAlert: { thresholdUsd: number; todayUsd: number } | null;
 };
 
-const VERDICT_COLORS: Record<string, string> = {
-  APPROVE: 'oklch(0.70 0.15 142)',
-  REQUEST_CHANGES: 'oklch(0.60 0.20 25)',
-  COMMENT: 'oklch(0.65 0.15 240)',
+// APPROVE → success, REQUEST_CHANGES → error, COMMENT → warning.
+const VERDICT_TONES: Record<string, ChartTone> = {
+  APPROVE: 'success',
+  REQUEST_CHANGES: 'error',
+  COMMENT: 'warning',
 };
 
-function verdictColor(verdict: string): string {
-  return VERDICT_COLORS[verdict] ?? 'oklch(0.62 0.18 250)';
-}
+const VERDICT_LABELS: Record<string, string> = {
+  APPROVE: 'Approve',
+  REQUEST_CHANGES: 'Request changes',
+  COMMENT: 'Comment',
+};
 
 function formatCost(amount: number): string {
   return `$${amount.toFixed(2)}`;
@@ -69,104 +55,59 @@ function formatSeconds(s: number): string {
   return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 }
 
-const TOOLTIP_STYLE = {
-  background: 'var(--glass-bg)',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '8px',
-  color: 'var(--text)',
-  fontSize: '12px',
-  backdropFilter: 'blur(12px)',
-} satisfies React.CSSProperties;
-
-function StatCardSkeleton(): React.ReactElement {
-  return (
-    <Card className="flex flex-col gap-3">
-      <Skeleton className="h-4 w-28" />
-      <Skeleton className="h-8 w-20" />
-      <Skeleton className="h-3 w-16" />
-    </Card>
-  );
+function formatDay(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return date;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
-type StatCardProps = {
-  label: string;
-  value: string;
-  icon: React.ReactElement;
-};
+function plural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
+}
 
-function StatCard({ label, value, icon }: StatCardProps): React.ReactElement {
-  return (
-    <Card hoverLift className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[var(--text-muted)]">{label}</span>
-        <span
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent-subtle)] text-[var(--accent)]"
-          aria-hidden="true"
-        >
-          {icon}
-        </span>
-      </div>
-      <p className="tabular-nums text-3xl font-bold text-[var(--text)]">{value}</p>
-    </Card>
-  );
+const HEADER = (
+  <PageHeader title="Dashboard" description="Review activity across every connected repo." />
+);
+
+function ChartSkeleton(): React.ReactElement {
+  return <Skeleton style={{ height: 240 }} />;
 }
 
 export default function DashboardPage(): React.ReactElement {
-  const { data, error, isLoading } = useSWR<DashboardStats>(
-    '/api/dashboard/stats',
-    fetcher,
-  );
+  const { data, error, isLoading, mutate } = useSWR<DashboardStats>('/api/dashboard/stats', fetcher);
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-6 p-6" role="status" aria-label="Loading dashboard">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-          <StatCardSkeleton />
+      <>
+        {HEADER}
+        <div role="status" aria-label="Loading dashboard" style={{ display: 'contents' }}>
+          <Grid variant="stats">
+            <StatCard label="Reviews today" loading />
+            <StatCard label="Reviews this week" loading />
+            <StatCard label="Cost this month" loading />
+            <StatCard label="Avg review time" loading />
+          </Grid>
+          <Grid variant="pair">
+            <ChartCard title="Reviews per day">
+              <ChartSkeleton />
+            </ChartCard>
+            <ChartCard title="Verdict distribution">
+              <ChartSkeleton />
+            </ChartCard>
+          </Grid>
         </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <Skeleton className="mb-4 h-5 w-36" />
-            <Skeleton className="h-72 w-full rounded-lg" />
-          </Card>
-          <Card>
-            <Skeleton className="mb-4 h-5 w-44" />
-            <Skeleton className="h-72 w-full rounded-lg" />
-          </Card>
-        </div>
-        <Card>
-          <Skeleton className="mb-3 h-5 w-36" />
-          <Skeleton className="h-16 w-full rounded-lg" />
-        </Card>
-      </div>
+      </>
     );
   }
 
-  if (error) {
-    const message =
-      error instanceof FetchError ? error.message : 'Failed to load dashboard data';
+  if (error || !data) {
+    const message = error instanceof FetchError ? error.message : 'Failed to load dashboard data';
     return (
-      <div className="p-6">
-        <Card role="alert">
-          <div className="flex items-center gap-3">
-            <AlertTriangle
-              className="h-5 w-5 shrink-0 text-[oklch(0.60_0.20_25)]"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="font-medium text-[var(--text)]">Could not load dashboard</p>
-              <p className="text-sm text-[var(--text-muted)]">{message}</p>
-            </div>
-          </div>
-        </Card>
-      </div>
+      <>
+        {HEADER}
+        <ErrorState title="Could not load dashboard" message={message} onRetry={() => void mutate()} />
+      </>
     );
-  }
-
-  if (!data) {
-    return <></>;
   }
 
   const {
@@ -180,288 +121,107 @@ export default function DashboardPage(): React.ReactElement {
     budgetAlert,
   } = data;
 
-  const budgetPct = budgetAlert
-    ? Math.min(100, (budgetAlert.todayUsd / budgetAlert.thresholdUsd) * 100)
-    : 0;
-  const budgetOver = budgetAlert ? budgetAlert.todayUsd > budgetAlert.thresholdUsd : false;
-  const budgetWarn = budgetPct >= 80;
-
-  const hasAttentionItems =
-    attention.reconnectAccounts.length > 0 ||
-    attention.refreshExpiringAccounts.length > 0 ||
-    attention.staleRepos.length > 0 ||
-    attention.failedLast24h > 0;
+  const barData = reviewsPerDay.map((d) => ({ label: formatDay(d.date), completed: d.completed, failed: d.failed }));
+  const donutData = verdictDistribution.map((v) => ({
+    label: VERDICT_LABELS[v.verdict] ?? v.verdict,
+    value: v.count,
+    tone: VERDICT_TONES[v.verdict] ?? 'neutral',
+  }));
+  const reviewTotal = verdictDistribution.reduce((sum, v) => sum + v.count, 0);
 
   return (
-    <main className="flex flex-col gap-6 p-6">
-      <section aria-label="Summary stats">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Reviews Today"
-            value={String(reviewsToday)}
-            icon={<GitPullRequest className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Reviews This Week"
-            value={String(reviewsThisWeek)}
-            icon={<Calendar className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Cost This Month"
-            value={formatCost(costThisMonth)}
-            icon={<DollarSign className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Avg Review Time"
-            value={formatSeconds(avgReviewSeconds)}
-            icon={<Timer className="h-4 w-4" />}
-          />
-        </div>
-      </section>
+    <>
+      {HEADER}
+
+      <Grid variant="stats" as="section" aria-label="Summary stats">
+        <StatCard label="Reviews today" value={String(reviewsToday)} icon="pr" />
+        <StatCard label="Reviews this week" value={String(reviewsThisWeek)} icon="calendar" />
+        <StatCard label="Cost this month" value={formatCost(costThisMonth)} icon="dollar" />
+        <StatCard label="Avg review time" value={formatSeconds(avgReviewSeconds)} icon="timer" />
+      </Grid>
 
       {budgetAlert && (
         <section aria-label="Daily budget">
           <Card>
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-[var(--text)]">
-                Daily Cost Budget
-              </h2>
-              <span
-                className={cn(
-                  'text-sm tabular-nums font-medium',
-                  budgetOver
-                    ? 'text-[oklch(0.60_0.20_25)]'
-                    : budgetWarn
-                      ? 'text-[oklch(0.55_0.14_85)]'
-                      : 'text-[var(--text-muted)]'
-                )}
-              >
-                {formatCost(budgetAlert.todayUsd)} / {formatCost(budgetAlert.thresholdUsd)}
-              </span>
-            </div>
-            <div
-              className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--nav-hover)]"
-              role="progressbar"
-              aria-valuenow={Math.round(budgetPct)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Daily cost budget usage"
-            >
-              <div
-                className={cn(
-                  'h-full rounded-full transition-all',
-                  budgetOver
-                    ? 'bg-[oklch(0.60_0.20_25)]'
-                    : budgetWarn
-                      ? 'bg-[oklch(0.80_0.12_85)]'
-                      : 'bg-[var(--accent)]'
-                )}
-                style={{ width: `${budgetPct}%` }}
-              />
-            </div>
-            {budgetOver && (
-              <p className="mt-2 text-xs text-[oklch(0.60_0.20_25)]">
-                Daily spend has exceeded the configured budget.
-              </p>
-            )}
+            <BudgetMeter
+              label="Daily cost budget"
+              spent={budgetAlert.todayUsd}
+              limit={budgetAlert.thresholdUsd}
+              format={formatCost}
+            />
           </Card>
         </section>
       )}
 
-      <section aria-label="Charts">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card>
-            <h2 className="mb-4 text-sm font-semibold text-[var(--text)]">Reviews per Day</h2>
-            <div
-              className="h-72"
-              role="img"
-              aria-label="Bar chart showing completed and failed reviews per day"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={reviewsPerDay}
-                  margin={{ top: 4, right: 4, bottom: 0, left: -20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                  />
-                  <RTooltip
-                    contentStyle={TOOLTIP_STYLE}
-                    cursor={{ fill: 'var(--accent-subtle)' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-muted)', paddingTop: '8px' }} />
-                  <Bar dataKey="completed" fill="oklch(0.62 0.18 250)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="failed" fill="oklch(0.60 0.20 25)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          <Card>
-            <h2 className="mb-4 text-sm font-semibold text-[var(--text)]">
-              Verdict Distribution
-            </h2>
-            <div
-              className="h-72"
-              role="img"
-              aria-label="Donut chart showing review verdict distribution"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={verdictDistribution}
-                    dataKey="count"
-                    nameKey="verdict"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="50%"
-                    outerRadius="70%"
-                    paddingAngle={3}
-                  >
-                    {verdictDistribution.map((entry) => (
-                      <Cell key={entry.verdict} fill={verdictColor(entry.verdict)} />
-                    ))}
-                  </Pie>
-                  <RTooltip contentStyle={TOOLTIP_STYLE} />
-                  <Legend
-                    wrapperStyle={{ fontSize: 12, color: 'var(--text-muted)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        </div>
-      </section>
+      <Grid variant="pair" as="section" aria-label="Charts">
+        <ChartCard title="Reviews per day">
+          <BarChart
+            data={barData}
+            series={[
+              { key: 'completed', label: 'Completed', tone: 'accent' },
+              { key: 'failed', label: 'Failed', tone: 'error', hatch: true },
+            ]}
+            ariaLabel="Bar chart showing completed and failed reviews per day"
+          />
+        </ChartCard>
+        <ChartCard title="Verdict distribution">
+          {donutData.length ? (
+            <DonutChart
+              data={donutData}
+              centerLabel="reviews"
+              centerValue={reviewTotal}
+              ariaLabel="Donut chart showing review verdict distribution"
+            />
+          ) : (
+            <p className="prr-hint">Verdicts appear here once reviews finish.</p>
+          )}
+        </ChartCard>
+      </Grid>
 
       <section aria-label="Needs attention">
         <Card>
-          <h2 className="mb-4 text-sm font-semibold text-[var(--text)]">Needs Attention</h2>
-          {hasAttentionItems ? (
-            <div className="flex flex-col gap-3">
-              {attention.reconnectAccounts.length > 0 && (
-                <div className="flex items-start gap-3 rounded-xl border border-[oklch(0.80_0.12_85/0.3)] bg-[oklch(0.80_0.12_85/0.08)] p-4">
-                  <PlugZap
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(0.55_0.14_85)]"
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium text-[var(--text)]">
-                      {attention.reconnectAccounts.length}{' '}
-                      account{attention.reconnectAccounts.length > 1 ? 's' : ''} need
-                      reconnecting
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {attention.reconnectAccounts.map((login) => (
-                        <Badge key={login} variant="warning">
-                          {login}
-                        </Badge>
-                      ))}
-                    </div>
-                    <Link
-                      href="/projects"
-                      className="text-sm font-medium text-[var(--accent)] underline-offset-2 hover:underline"
-                    >
-                      Manage in Projects →
-                    </Link>
-                  </div>
-                </div>
-              )}
-              {attention.refreshExpiringAccounts.length > 0 && (
-                <div className="flex items-start gap-3 rounded-xl border border-[oklch(0.80_0.12_85/0.3)] bg-[oklch(0.80_0.12_85/0.08)] p-4">
-                  <Clock
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(0.55_0.14_85)]"
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium text-[var(--text)]">
-                      {attention.refreshExpiringAccounts.length} GitHub connection
-                      {attention.refreshExpiringAccounts.length > 1 ? 's' : ''} expiring soon
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {attention.refreshExpiringAccounts.map((acc) => (
-                        <Badge key={acc.githubLogin} variant="warning">
-                          {acc.githubLogin} · {new Date(acc.expiresAt).toLocaleDateString()}
-                        </Badge>
-                      ))}
-                    </div>
-                    <Link
-                      href="/projects"
-                      className="text-sm font-medium text-[var(--accent)] underline-offset-2 hover:underline"
-                    >
-                      Reconnect in Projects →
-                    </Link>
-                  </div>
-                </div>
-              )}
-              {attention.staleRepos.length > 0 && (
-                <div className="flex items-start gap-3 rounded-xl border border-[var(--glass-border)] bg-[var(--nav-hover)] p-4">
-                  <WifiOff
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-muted)]"
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium text-[var(--text)]">
-                      {attention.staleRepos.length} repositor
-                      {attention.staleRepos.length > 1 ? 'ies have' : 'y has'} no recent webhook events
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {attention.staleRepos.map((name) => (
-                        <Badge key={name} variant="neutral">
-                          {name}
-                        </Badge>
-                      ))}
-                    </div>
-                    <Link
-                      href="/projects"
-                      className="text-sm font-medium text-[var(--accent)] underline-offset-2 hover:underline"
-                    >
-                      Check webhook config →
-                    </Link>
-                  </div>
-                </div>
-              )}
-              {attention.failedLast24h > 0 && (
-                <div className="flex items-start gap-3 rounded-xl border border-[oklch(0.60_0.20_25/0.3)] bg-[oklch(0.60_0.20_25/0.08)] p-4">
-                  <AlertTriangle
-                    className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(0.50_0.20_25)]"
-                    aria-hidden="true"
-                  />
-                  <div className="flex flex-col gap-1">
-                    <p className="text-sm font-medium text-[var(--text)]">
-                      {attention.failedLast24h} failed review
-                      {attention.failedLast24h > 1 ? 's' : ''} in the last 24h
-                    </p>
-                    <Link
-                      href="/requests?status=failed"
-                      className="text-sm font-medium text-[var(--accent)] underline-offset-2 hover:underline"
-                    >
-                      View failed requests →
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 py-1 text-[var(--text-muted)]">
-              <CheckCheck
-                className="h-5 w-5 text-[oklch(0.70_0.15_142)]"
-                aria-hidden="true"
+          <SectionHeading>Needs attention</SectionHeading>
+          <AttentionList>
+            {attention.reconnectAccounts.length > 0 && (
+              <AttentionItem
+                tone="warning"
+                icon="plug"
+                title={`${attention.reconnectAccounts.length} ${plural(attention.reconnectAccounts.length, 'account needs', 'accounts need')} reconnecting`}
+                tags={attention.reconnectAccounts}
+                action={{ label: 'Manage in Projects', href: '/projects' }}
               />
-              <span className="text-sm">All clear — no issues to address</span>
-            </div>
-          )}
+            )}
+            {attention.refreshExpiringAccounts.length > 0 && (
+              <AttentionItem
+                tone="warning"
+                icon="clock"
+                title={`${attention.refreshExpiringAccounts.length} GitHub ${plural(attention.refreshExpiringAccounts.length, 'connection', 'connections')} expiring soon`}
+                tags={attention.refreshExpiringAccounts.map(
+                  (acc) => `${acc.githubLogin} · ${new Date(acc.expiresAt).toLocaleDateString()}`
+                )}
+                action={{ label: 'Reconnect in Projects', href: '/projects' }}
+              />
+            )}
+            {attention.staleRepos.length > 0 && (
+              <AttentionItem
+                tone="neutral"
+                icon="wifiOff"
+                title={`${attention.staleRepos.length} ${plural(attention.staleRepos.length, 'repository has', 'repositories have')} no recent webhook events`}
+                tags={attention.staleRepos}
+                action={{ label: 'Check webhook config', href: '/projects' }}
+              />
+            )}
+            {attention.failedLast24h > 0 && (
+              <AttentionItem
+                tone="error"
+                icon="alert"
+                title={`${attention.failedLast24h} failed ${plural(attention.failedLast24h, 'review', 'reviews')} in the last 24h`}
+                action={{ label: 'View failed requests', href: '/requests?status=failed' }}
+              />
+            )}
+          </AttentionList>
         </Card>
       </section>
-    </main>
+    </>
   );
 }

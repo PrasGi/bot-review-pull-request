@@ -2,16 +2,19 @@
 
 import * as React from 'react';
 import useSWR from 'swr';
-import { Plus, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Input, PasswordInput } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { toast } from '@/components/ui/Toast';
+import { PageHeader, SectionHeading } from '@/components/layout/PageHeader';
+import { EmptyState, ErrorState } from '@/components/data/States';
+import { ProviderKeyRow } from '@/components/projects/ProviderKeyRow';
 import { fetcher, mutateJson, FetchError } from '@/lib/ui/swr';
+import styles from './page.module.css';
 
 type Provider = 'anthropic' | 'openai' | 'glm' | 'kimi';
 type ReviewProfile = 'chill' | 'normal' | 'professional' | 'expert';
@@ -56,25 +59,16 @@ const REVIEW_PROFILE_OPTIONS: { value: ReviewProfile; label: string }[] = [
   { value: 'expert', label: 'Expert' },
 ];
 
-function SectionHeading({ children }: { children: React.ReactNode }): React.ReactElement {
-  return (
-    <h2 className="text-base font-semibold text-[var(--text)] mb-5">
-      {children}
-    </h2>
-  );
-}
+const HEADER = <PageHeader title="Settings" description="Global defaults, provider keys, pricing and cost alerts." />;
 
 function LoadingSkeleton(): React.ReactElement {
   return (
-    <div className="flex flex-col gap-6">
+    <div role="status" aria-label="Loading settings" className={styles.page}>
       {[1, 2, 3, 4].map((i) => (
         <Card key={i}>
-          <Skeleton className="h-5 w-40 mb-5" />
-          <div className="flex flex-col gap-4">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-32 ml-auto" />
-          </div>
+          <Skeleton style={{ height: 18, width: 160, marginBottom: 20 }} />
+          <Skeleton style={{ height: 40, marginBottom: 16 }} />
+          <Skeleton style={{ height: 40 }} />
         </Card>
       ))}
     </div>
@@ -118,15 +112,15 @@ function DefaultsSection({
   return (
     <Card>
       <SectionHeading>Defaults</SectionHeading>
-      <div className="flex flex-col gap-4">
+      <div className={styles.fields}>
         <Select
-          label="Default Provider"
+          label="Default provider"
           value={provider}
           options={PROVIDER_OPTIONS}
           onChange={(e) => setProvider(e.target.value as Provider)}
         />
         <Input
-          label="Default Model"
+          label="Default model"
           type="text"
           required
           minLength={1}
@@ -134,14 +128,14 @@ function DefaultsSection({
           onChange={(e) => setModel(e.target.value)}
         />
         <Select
-          label="Default Review Profile"
+          label="Default review profile"
           value={profile}
           options={REVIEW_PROFILE_OPTIONS}
           onChange={(e) => setProfile(e.target.value as ReviewProfile)}
         />
-        <div className="flex justify-end pt-1">
+        <div className={styles.actions}>
           <Button
-            variant="primary"
+            variant="secondary"
             loading={saving}
             disabled={!isDirty}
             onClick={() => { void handleSave(); }}
@@ -154,7 +148,7 @@ function DefaultsSection({
   );
 }
 
-function ProviderKeyRow({
+function ProviderKey({
   provider,
   isSet,
   onSaved,
@@ -163,57 +157,25 @@ function ProviderKeyRow({
   isSet: boolean;
   onSaved: () => void;
 }): React.ReactElement {
-  const [value, setValue] = React.useState('');
   const [saving, setSaving] = React.useState(false);
 
-  const handleSave = async (): Promise<void> => {
-    if (!value.trim()) return;
+  const handleSave = async (value: string): Promise<boolean> => {
+    if (!value) return false;
     setSaving(true);
     try {
-      await mutateJson(SETTINGS_KEY, 'PATCH', {
-        providerKeys: { [provider]: value.trim() },
-      });
+      await mutateJson(SETTINGS_KEY, 'PATCH', { providerKeys: { [provider]: value } });
       toast.success('Saved');
-      setValue('');
       onSaved();
+      return true;
     } catch (err) {
       toast.error(err instanceof FetchError ? err.message : 'Failed to save key');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  const label = provider.charAt(0).toUpperCase() + provider.slice(1);
-
-  return (
-    <div className="flex flex-col gap-2 py-3 border-b border-[var(--glass-border)] last:border-0">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[var(--text)]">{label}</span>
-        <Badge variant={isSet ? 'success' : 'neutral'}>
-          {isSet ? 'Configured' : 'Not set'}
-        </Badge>
-      </div>
-      <div className="flex gap-2">
-        <PasswordInput
-          aria-label={`${label} API key`}
-          placeholder={isSet ? 'Enter new key to replace' : 'Enter API key'}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          containerClassName="flex-1"
-          disabled={saving}
-        />
-        <Button
-          variant="secondary"
-          loading={saving}
-          disabled={!value.trim()}
-          onClick={() => { void handleSave(); }}
-          className="shrink-0"
-        >
-          Save key
-        </Button>
-      </div>
-    </div>
-  );
+  return <ProviderKeyRow provider={provider} isSet={isSet} saving={saving} onSave={handleSave} />;
 }
 
 function ProviderKeysSection({
@@ -225,13 +187,13 @@ function ProviderKeysSection({
 }): React.ReactElement {
   return (
     <Card>
-      <SectionHeading>Provider API Keys</SectionHeading>
-      <p className="text-xs text-[var(--text-muted)] mb-4">
+      <SectionHeading>Provider API keys</SectionHeading>
+      <p className={`prr-hint ${styles.intro}`}>
         Keys are write-only and never returned. Enter a new value to replace an existing key.
       </p>
-      <div className="flex flex-col">
+      <div>
         {PROVIDERS.map((p) => (
-          <ProviderKeyRow
+          <ProviderKey
             key={p}
             provider={p}
             isSet={data.providerKeysSet[p] === true}
@@ -313,39 +275,41 @@ function ModelPricingSection({
 
   return (
     <Card>
-      <SectionHeading>Model Pricing</SectionHeading>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <SectionHeading>Model pricing</SectionHeading>
+      <div className={styles.pricingScroll}>
+        <table className={styles.pricing}>
           <thead>
-            <tr className="text-left text-[var(--text-muted)]">
-              <th scope="col" className="pb-3 pr-3 font-medium text-xs">Provider</th>
-              <th scope="col" className="pb-3 pr-3 font-medium text-xs">Model</th>
-              <th scope="col" className="pb-3 pr-3 font-medium text-xs text-right">Input / M tokens ($)</th>
-              <th scope="col" className="pb-3 pr-3 font-medium text-xs text-right">Output / M tokens ($)</th>
-              <th scope="col" className="pb-3 font-medium text-xs sr-only">Actions</th>
+            <tr>
+              <th scope="col" className="prr-label">Provider</th>
+              <th scope="col" className="prr-label">Model</th>
+              <th scope="col" className={`prr-label ${styles.num}`}>Input / M tokens ($)</th>
+              <th scope="col" className={`prr-label ${styles.num}`}>Output / M tokens ($)</th>
+              <th scope="col">
+                <span className="prr-sr">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="align-top">
-                <td className="pr-3 pb-2">
+              <tr key={row.id}>
+                <td>
                   <Select
                     aria-label="Provider"
                     value={row.provider}
                     options={PROVIDER_OPTIONS}
                     onChange={(e) => updateRow(row.id, 'provider', e.target.value)}
-                    containerClassName="min-w-[110px]"
+                    containerClassName={styles.providerCell}
                   />
                 </td>
-                <td className="pr-3 pb-2">
+                <td>
                   <Input
                     aria-label="Model name"
                     value={row.model}
                     onChange={(e) => updateRow(row.id, 'model', e.target.value)}
-                    containerClassName="min-w-[140px]"
+                    containerClassName={styles.modelCell}
                   />
                 </td>
-                <td className="pr-3 pb-2">
+                <td>
                   <Input
                     aria-label="Input cost per million tokens"
                     type="number"
@@ -353,11 +317,11 @@ function ModelPricingSection({
                     step="any"
                     value={row.inputPerM}
                     onChange={(e) => updateRow(row.id, 'inputPerM', e.target.value)}
-                    className="text-right tabular-nums"
-                    containerClassName="min-w-[110px]"
+                    className={styles.numInput}
+                    containerClassName={styles.priceCell}
                   />
                 </td>
-                <td className="pr-3 pb-2">
+                <td>
                   <Input
                     aria-label="Output cost per million tokens"
                     type="number"
@@ -365,19 +329,13 @@ function ModelPricingSection({
                     step="any"
                     value={row.outputPerM}
                     onChange={(e) => updateRow(row.id, 'outputPerM', e.target.value)}
-                    className="text-right tabular-nums"
-                    containerClassName="min-w-[110px]"
+                    className={styles.numInput}
+                    containerClassName={styles.priceCell}
                   />
                 </td>
-                <td className="pb-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Remove row"
-                    onClick={() => removeRow(row.id)}
-                    className="mt-0"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                <td>
+                  <Button variant="ghost" size="icon" aria-label="Remove row" onClick={() => removeRow(row.id)}>
+                    <Icon name="trash" />
                   </Button>
                 </td>
               </tr>
@@ -385,17 +343,13 @@ function ModelPricingSection({
           </tbody>
         </table>
       </div>
-      {rows.length === 0 && (
-        <p className="text-sm text-[var(--text-muted)] text-center py-4">
-          No pricing rows. Add one below.
-        </p>
-      )}
-      <div className="flex items-center justify-between pt-3 mt-1 border-t border-[var(--glass-border)]">
+      {rows.length === 0 && <EmptyState title="No pricing rows" description="Add a row to price a model." />}
+      <div className={styles.footer}>
         <Button variant="ghost" size="sm" onClick={addRow}>
-          <Plus className="h-4 w-4" aria-hidden="true" />
+          <Icon name="plus" size={14} />
           Add row
         </Button>
-        <Button variant="primary" loading={saving} onClick={() => { void handleSave(); }}>
+        <Button variant="secondary" loading={saving} onClick={() => { void handleSave(); }}>
           Save pricing
         </Button>
       </div>
@@ -434,8 +388,8 @@ function CostAlertsSection({
 
   return (
     <Card>
-      <SectionHeading>Cost Alerts</SectionHeading>
-      <div className="flex flex-col gap-4">
+      <SectionHeading>Cost alerts</SectionHeading>
+      <div className={styles.fields}>
         <Switch
           id="enable-daily-alert"
           label="Enable daily cost alert"
@@ -455,12 +409,12 @@ function CostAlertsSection({
             placeholder="e.g. 10.00"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            className="tabular-nums"
+            className={styles.numInput}
           />
         )}
-        <div className="flex justify-end pt-1">
+        <div className={styles.actions}>
           <Button
-            variant="primary"
+            variant="secondary"
             loading={saving}
             disabled={!isDirty}
             onClick={() => { void handleSave(); }}
@@ -478,8 +432,8 @@ export default function SettingsPage(): React.ReactElement {
 
   if (isLoading) {
     return (
-      <div className="px-4 py-6 max-w-3xl mx-auto">
-        <h1 className="text-xl font-semibold text-[var(--text)] mb-6">Settings</h1>
+      <div className={styles.page}>
+        {HEADER}
         <LoadingSkeleton />
       </div>
     );
@@ -488,38 +442,32 @@ export default function SettingsPage(): React.ReactElement {
   if (error || !data) {
     const message = error instanceof FetchError ? error.message : 'Failed to load settings';
     return (
-      <div className="px-4 py-6 max-w-3xl mx-auto">
-        <h1 className="text-xl font-semibold text-[var(--text)] mb-6">Settings</h1>
-        <Card>
-          <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
-            {message}
-          </p>
-        </Card>
+      <div className={styles.page}>
+        {HEADER}
+        <ErrorState title="Could not load settings" message={message} onRetry={() => void mutate()} />
       </div>
     );
   }
 
   return (
-    <div className="px-4 py-6 max-w-3xl mx-auto">
-      <h1 className="text-xl font-semibold text-[var(--text)] mb-6">Settings</h1>
-      <div className="flex flex-col gap-6">
-        <DefaultsSection
-          key={`${data.defaultProvider}|${data.defaultModel}|${data.defaultReviewProfile}`}
-          data={data}
-          onMutate={() => { void mutate(); }}
-        />
-        <ProviderKeysSection data={data} onMutate={() => { void mutate(); }} />
-        <ModelPricingSection
-          key={`pricing|${data.modelPricing.map((r) => `${r.provider}:${r.model}`).join(',')}`}
-          data={data}
-          onMutate={() => { void mutate(); }}
-        />
-        <CostAlertsSection
-          key={`alert|${String(data.dailyCostAlertUsd)}`}
-          data={data}
-          onMutate={() => { void mutate(); }}
-        />
-      </div>
+    <div className={styles.page}>
+      {HEADER}
+      <DefaultsSection
+        key={`${data.defaultProvider}|${data.defaultModel}|${data.defaultReviewProfile}`}
+        data={data}
+        onMutate={() => { void mutate(); }}
+      />
+      <ProviderKeysSection data={data} onMutate={() => { void mutate(); }} />
+      <ModelPricingSection
+        key={`pricing|${data.modelPricing.map((r) => `${r.provider}:${r.model}`).join(',')}`}
+        data={data}
+        onMutate={() => { void mutate(); }}
+      />
+      <CostAlertsSection
+        key={`alert|${String(data.dailyCostAlertUsd)}`}
+        data={data}
+        onMutate={() => { void mutate(); }}
+      />
     </div>
   );
 }

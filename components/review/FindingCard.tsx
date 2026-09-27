@@ -1,14 +1,8 @@
 import * as React from 'react';
 import { cn } from '@/lib/ui/cn';
-import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { severityTone } from '@/lib/ui/tones';
+import { Badge } from '@/components/ui/Badge';
 import { CodeBlock } from './CodeBlock';
-
-// critical/major → error, minor → warning, nit (and anything unknown) → neutral.
-const SEVERITY_TONE: Record<string, 'error' | 'warning'> = { critical: 'error', major: 'error', minor: 'warning' };
-
-function severityTone(severity: string): BadgeVariant {
-  return SEVERITY_TONE[severity] ?? 'neutral';
-}
 
 type FindingCardProps = {
   severity: string;
@@ -42,5 +36,5 @@ function FindingCard({ severity, category, location, comment, suggestion, blocki
   );
 }
 
-export { FindingCard, severityTone };
+export { FindingCard };
 export type { FindingCardProps };

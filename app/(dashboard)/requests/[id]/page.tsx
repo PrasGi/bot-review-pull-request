@@ -4,13 +4,22 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import useSWR from 'swr';
-import { ExternalLink, ChevronLeft, RefreshCw } from 'lucide-react';
 import { fetcher, mutateJson, FetchError } from '@/lib/ui/swr';
+import { requestStatusTone, verdictTone } from '@/lib/ui/tones';
 import { toast } from '@/components/ui/Toast';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Badge, type BadgeVariant } from '@/components/ui/Badge';
+import { Button, buttonClass } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PageHeader, SectionHeading } from '@/components/layout/PageHeader';
+import { Grid } from '@/components/layout/Grid';
+import { DescriptionList, type DescriptionItem } from '@/components/data/DescriptionList';
+import { EmptyState, ErrorState } from '@/components/data/States';
+import { FindingCard } from '@/components/review/FindingCard';
+import { CodeBlock } from '@/components/review/CodeBlock';
+import { Disclosure } from '@/components/review/Disclosure';
+import styles from './page.module.css';
 
 type FindingSeverity = 'critical' | 'major' | 'minor' | 'nit';
 type FindingCategory = 'bug' | 'security' | 'performance' | 'maintainability' | 'test' | 'scope';
@@ -111,35 +120,13 @@ type RequestDetail = {
   repoFullName: string;
 };
 
-type StatusVariant = 'success' | 'error' | 'info' | 'neutral';
-type VerdictVariant = 'success' | 'error' | 'neutral';
-type SeverityVariant = 'error' | 'warning' | 'neutral';
-type IntentVariant = 'success' | 'warning' | 'error';
+const INTENT_TONE: Record<IntentMatchStatus, BadgeVariant> = {
+  match: 'success',
+  partial: 'warning',
+  mismatch: 'error',
+};
 
-function statusVariant(status: string): StatusVariant {
-  if (status === 'completed') return 'success';
-  if (status === 'failed') return 'error';
-  if (status === 'processing' || status === 'queued') return 'info';
-  return 'neutral';
-}
-
-function verdictVariant(verdict: Verdict): VerdictVariant {
-  if (verdict === 'APPROVE') return 'success';
-  if (verdict === 'REQUEST_CHANGES') return 'error';
-  return 'neutral';
-}
-
-function severityVariant(severity: FindingSeverity): SeverityVariant {
-  if (severity === 'critical' || severity === 'major') return 'error';
-  if (severity === 'minor') return 'warning';
-  return 'neutral';
-}
-
-function intentVariant(status: IntentMatchStatus): IntentVariant {
-  if (status === 'match') return 'success';
-  if (status === 'partial') return 'warning';
-  return 'error';
-}
+const INTENT_MARK: Record<IntentMatchStatus, string> = { match: '✓', partial: '!', mismatch: '✕' };
 
 function formatCost(usd: number): string {
   return `$${usd.toFixed(4)}`;
@@ -171,27 +158,35 @@ const SEVERITY_ORDER: Record<FindingSeverity, number> = {
   nit: 3,
 };
 
+const BACK_LINK = (
+  <Link href="/requests" className={buttonClass('secondary', 'icon')} aria-label="Back to requests">
+    <Icon name="arrowLeft" />
+  </Link>
+);
+
 function DetailSkeleton(): React.ReactElement {
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <Skeleton className="h-7 w-64" />
-      <Card>
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="h-4 w-72" />
-          <Skeleton className="h-4 w-56" />
-        </div>
-      </Card>
-      <Card>
-        <Skeleton className="h-5 w-32 mb-4" />
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-4/6" />
-        </div>
-      </Card>
+    <div role="status" aria-label="Loading request" className={styles.skeleton}>
+      <Skeleton style={{ height: 36, width: 320 }} />
+      <Grid variant="pair">
+        <Card>
+          <Skeleton style={{ height: 14, width: 96, marginBottom: 16 }} />
+          <Skeleton style={{ height: 12, width: '80%', marginBottom: 10 }} />
+          <Skeleton style={{ height: 12, width: '60%', marginBottom: 10 }} />
+          <Skeleton style={{ height: 12, width: '70%' }} />
+        </Card>
+        <Card>
+          <Skeleton style={{ height: 14, width: 96, marginBottom: 16 }} />
+          <Skeleton style={{ height: 12, width: '75%', marginBottom: 10 }} />
+          <Skeleton style={{ height: 12, width: '55%' }} />
+        </Card>
+      </Grid>
     </div>
   );
+}
+
+function compact(items: (DescriptionItem | false | '' | undefined)[]): DescriptionItem[] {
+  return items.filter((item): item is DescriptionItem => Boolean(item));
 }
 
 export default function RequestDetailPage(): React.ReactElement {
@@ -199,10 +194,7 @@ export default function RequestDetailPage(): React.ReactElement {
   const [retrying, setRetrying] = React.useState(false);
 
   const apiUrl = `/api/dashboard/requests/${id}`;
-  const { data, error, isLoading, mutate } = useSWR<RequestDetail, FetchError>(
-    apiUrl,
-    fetcher
-  );
+  const { data, error, isLoading, mutate } = useSWR<RequestDetail, FetchError>(apiUrl, fetcher);
 
   async function handleRetry(): Promise<void> {
     setRetrying(true);
@@ -223,28 +215,25 @@ export default function RequestDetailPage(): React.ReactElement {
   if (error) {
     if (error.status === 404) {
       return (
-        <div className="flex flex-col gap-6 p-6">
-          <Card className="text-center py-12">
-            <p className="text-[var(--text-muted)] font-medium">Request not found</p>
-            <p className="text-sm text-[var(--text-muted)] mt-1">
-              This review request does not exist or you don&apos;t have access.
-            </p>
-            <Link href="/requests" className="mt-4 inline-block">
-              <Button variant="secondary" size="sm">
-                <ChevronLeft className="h-4 w-4" />
+        <Card>
+          <EmptyState
+            title="Request not found"
+            description="This review request does not exist or you don't have access."
+            action={
+              <Link href="/requests" className={buttonClass('secondary', 'sm')}>
+                <Icon name="arrowLeft" size={14} />
                 Back to requests
-              </Button>
-            </Link>
-          </Card>
-        </div>
+              </Link>
+            }
+          />
+        </Card>
       );
     }
     return (
-      <div className="flex flex-col gap-6 p-6">
-        <Card className="text-center py-8">
-          <p className="text-sm text-[oklch(0.60_0.20_25)]">{error.message}</p>
-        </Card>
-      </div>
+      <>
+        <PageHeader title="Review request" back={BACK_LINK} />
+        <ErrorState title="Could not load request" message={error.message} onRetry={() => void mutate()} />
+      </>
     );
   }
 
@@ -252,291 +241,199 @@ export default function RequestDetailPage(): React.ReactElement {
 
   const { request, review, aiCalls, repoFullName } = data;
   const sortedFindings = review
-    ? [...review.findings].sort(
-        (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
-      )
+    ? [...review.findings].sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity])
     : [];
   const totalCost = aiCalls.reduce((sum, c) => sum + c.costUsd, 0);
+  const timings = request.timings;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start gap-3">
-        <Link href="/requests">
-          <Button variant="ghost" size="icon" aria-label="Back to requests">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2 mb-1">
-            <h1 className="text-lg font-semibold text-[var(--text)] truncate">
-              #{request.prNumber} {request.prTitle}
-            </h1>
-            <Badge variant={statusVariant(request.status)}>
-              {request.status.replace(/_/g, ' ')}
-            </Badge>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-muted)]">
-            <span>{repoFullName}</span>
-            <span>&middot;</span>
-            <span>by {request.prAuthor}</span>
-            <span>&middot;</span>
-            <span className="capitalize">{request.kind.replace(/_/g, ' ')} &middot; {request.trigger.replace(/_/g, ' ')}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <a
-            href={request.prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:underline"
-          >
-            Open PR
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleRetry}
-            loading={retrying}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Retry review
-          </Button>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        back={BACK_LINK}
+        kicker={repoFullName}
+        title={`#${request.prNumber} ${request.prTitle}`}
+        badge={<Badge variant={requestStatusTone(request.status)}>{request.status.replace(/_/g, ' ')}</Badge>}
+        description={
+          <>
+            by <code>@{request.prAuthor}</code> · {request.kind.replace(/_/g, ' ')} · {request.trigger.replace(/_/g, ' ')}
+          </>
+        }
+        actions={
+          <>
+            <a href={request.prUrl} target="_blank" rel="noopener noreferrer" className={buttonClass('ghost', 'sm')}>
+              Open PR
+              <Icon name="external" size={14} />
+            </a>
+            <Button variant="secondary" size="sm" onClick={handleRetry} loading={retrying}>
+              {!retrying && <Icon name="refresh" size={14} />}
+              Retry review
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Grid variant="pair">
         <Card>
-          <h2 className="text-sm font-semibold text-[var(--text)] mb-3">Details</h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            <dt className="text-[var(--text-muted)]">Created</dt>
-            <dd className="text-[var(--text)]">
-              <time dateTime={request.createdAt}>{formatDate(request.createdAt)}</time>
-            </dd>
-            {request.startedAt && (
-              <>
-                <dt className="text-[var(--text-muted)]">Started</dt>
-                <dd className="text-[var(--text)]">
-                  <time dateTime={request.startedAt}>{formatDate(request.startedAt)}</time>
-                </dd>
-              </>
-            )}
-            {request.finishedAt && (
-              <>
-                <dt className="text-[var(--text-muted)]">Finished</dt>
-                <dd className="text-[var(--text)]">
-                  <time dateTime={request.finishedAt}>{formatDate(request.finishedAt)}</time>
-                </dd>
-              </>
-            )}
-            <dt className="text-[var(--text-muted)]">Head SHA</dt>
-            <dd className="font-mono text-xs text-[var(--text)] tabular-nums">{sha7(request.headSha)}</dd>
-            <dt className="text-[var(--text-muted)]">Base SHA</dt>
-            <dd className="font-mono text-xs text-[var(--text)] tabular-nums">{sha7(request.baseSha)}</dd>
-            {totalCost > 0 && (
-              <>
-                <dt className="text-[var(--text-muted)]">Total cost</dt>
-                <dd className="tabular-nums text-[var(--text)]">{formatCost(totalCost)}</dd>
-              </>
-            )}
-          </dl>
+          <DescriptionList
+            title="Details"
+            items={compact([
+              { term: 'Created', value: <time dateTime={request.createdAt}>{formatDate(request.createdAt)}</time> },
+              request.startedAt && {
+                term: 'Started',
+                value: <time dateTime={request.startedAt}>{formatDate(request.startedAt)}</time>,
+              },
+              request.finishedAt && {
+                term: 'Finished',
+                value: <time dateTime={request.finishedAt}>{formatDate(request.finishedAt)}</time>,
+              },
+              { term: 'Head SHA', value: sha7(request.headSha), mono: true },
+              { term: 'Base SHA', value: sha7(request.baseSha), mono: true },
+              totalCost > 0 && { term: 'Total cost', value: formatCost(totalCost), mono: true },
+            ])}
+          />
         </Card>
 
-        {request.stats && (
-          <Card>
-            <h2 className="text-sm font-semibold text-[var(--text)] mb-3">Stats</h2>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-[var(--text-muted)]">Files</dt>
-              <dd className="tabular-nums text-[var(--text)]">
-                {request.stats.filesReviewed} / {request.stats.fileCount} reviewed
-              </dd>
-              <dt className="text-[var(--text-muted)]">Changes</dt>
-              <dd className="tabular-nums text-[var(--text)]">
-                +{request.stats.additions} / -{request.stats.deletions}
-              </dd>
-              <dt className="text-[var(--text-muted)]">Chunks</dt>
-              <dd className="tabular-nums text-[var(--text)]">{request.stats.chunks}</dd>
-              {request.stats.filesSkipped.length > 0 && (
-                <>
-                  <dt className="text-[var(--text-muted)]">Skipped</dt>
-                  <dd className="text-[var(--text)]">{request.stats.filesSkipped.length} file(s)</dd>
-                </>
-              )}
-            </dl>
+        {(request.stats || timings) && (
+          <Card className={styles.stack}>
+            {request.stats && (
+              <DescriptionList
+                title="Stats"
+                items={compact([
+                  {
+                    term: 'Files',
+                    value: `${request.stats.filesReviewed} / ${request.stats.fileCount} reviewed`,
+                    mono: true,
+                  },
+                  { term: 'Changes', value: `+${request.stats.additions} / -${request.stats.deletions}`, mono: true },
+                  { term: 'Chunks', value: String(request.stats.chunks), mono: true },
+                  request.stats.filesSkipped.length > 0 && {
+                    term: 'Skipped',
+                    value: `${request.stats.filesSkipped.length} file(s)`,
+                    mono: true,
+                  },
+                ])}
+              />
+            )}
+            {timings && (
+              <DescriptionList
+                title="Timings"
+                items={compact([
+                  timings.queuedMs !== undefined && { term: 'Queued', value: formatMs(timings.queuedMs), mono: true },
+                  timings.processMs !== undefined && { term: 'Process', value: formatMs(timings.processMs), mono: true },
+                  timings.aiMs !== undefined && { term: 'AI', value: formatMs(timings.aiMs), mono: true },
+                  timings.githubMs !== undefined && { term: 'GitHub', value: formatMs(timings.githubMs), mono: true },
+                ])}
+              />
+            )}
           </Card>
         )}
-
-        {request.timings && (
-          <Card>
-            <h2 className="text-sm font-semibold text-[var(--text)] mb-3">Timings</h2>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-              {request.timings.queuedMs !== undefined && (
-                <>
-                  <dt className="text-[var(--text-muted)]">Queued</dt>
-                  <dd className="tabular-nums text-[var(--text)]">{formatMs(request.timings.queuedMs)}</dd>
-                </>
-              )}
-              {request.timings.processMs !== undefined && (
-                <>
-                  <dt className="text-[var(--text-muted)]">Process</dt>
-                  <dd className="tabular-nums text-[var(--text)]">{formatMs(request.timings.processMs)}</dd>
-                </>
-              )}
-              {request.timings.aiMs !== undefined && (
-                <>
-                  <dt className="text-[var(--text-muted)]">AI</dt>
-                  <dd className="tabular-nums text-[var(--text)]">{formatMs(request.timings.aiMs)}</dd>
-                </>
-              )}
-              {request.timings.githubMs !== undefined && (
-                <>
-                  <dt className="text-[var(--text-muted)]">GitHub</dt>
-                  <dd className="tabular-nums text-[var(--text)]">{formatMs(request.timings.githubMs)}</dd>
-                </>
-              )}
-            </dl>
-          </Card>
-        )}
-      </div>
+      </Grid>
 
       {request.error && (
-        <Card className="border border-[oklch(0.60_0.20_25/0.30)] bg-[oklch(0.60_0.20_25/0.05)]">
-          <h2 className="text-sm font-semibold text-[oklch(0.50_0.20_25)] mb-2">Error</h2>
-          <p className="text-xs text-[var(--text-muted)] mb-1">Stage: <span className="font-mono">{request.error.stage}</span></p>
-          <p className="text-sm text-[var(--text)]">{request.error.message}</p>
-          {request.error.providerCode && (
-            <p className="text-xs text-[var(--text-muted)] mt-1">Code: <span className="font-mono">{request.error.providerCode}</span></p>
-          )}
-        </Card>
+        <ErrorState
+          title={`Failed at ${request.error.stage}`}
+          message={
+            request.error.providerCode
+              ? `${request.error.message} (code ${request.error.providerCode})`
+              : request.error.message
+          }
+        />
       )}
 
       {review && (
         <Card>
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <h2 className="text-sm font-semibold text-[var(--text)]">AI Review</h2>
-            <Badge variant={verdictVariant(review.verdict)}>{review.verdict.replace(/_/g, ' ')}</Badge>
-            {review.verdictForced && (
-              <Badge variant="warning">forced: {review.verdictForced.replace(/_/g, ' ')}</Badge>
-            )}
-            <span className="text-xs text-[var(--text-muted)] tabular-nums ml-auto">
-              {Math.round(review.confidence * 100)}% confidence
-            </span>
-          </div>
+          <SectionHeading
+            action={<code className={styles.confidence}>{Math.round(review.confidence * 100)}% confidence</code>}
+          >
+            AI review
+            <Badge variant={verdictTone(review.verdict)}>{review.verdict}</Badge>
+            {review.verdictForced && <Badge variant="warning">forced: {review.verdictForced}</Badge>}
+          </SectionHeading>
 
-          <p className="text-sm text-[var(--text)] mb-4 leading-relaxed">{review.summary}</p>
+          <p className={styles.summary}>{review.summary}</p>
 
-          <div className="flex items-start gap-2 mb-6 p-3 rounded-[var(--radius-panel)] bg-[var(--nav-hover)]">
-            <Badge variant={intentVariant(review.intentMatch.status)} className="shrink-0 mt-0.5">
-              {review.intentMatch.status}
+          <div className={styles.intent}>
+            <Badge variant={INTENT_TONE[review.intentMatch.status]}>
+              {INTENT_MARK[review.intentMatch.status]} {review.intentMatch.status}
             </Badge>
-            <p className="text-xs text-[var(--text-muted)] leading-relaxed">{review.intentMatch.explanation}</p>
+            <p className="prr-hint">{review.intentMatch.explanation}</p>
           </div>
 
           {sortedFindings.length > 0 && (
-            <div>
-              <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-3">
-                Findings ({sortedFindings.length})
-              </h3>
-              <ul className="flex flex-col gap-3">
+            <section aria-label="Findings">
+              <SectionHeading as="h3" count={sortedFindings.length}>
+                Findings
+              </SectionHeading>
+              <ul className={styles.findings}>
                 {sortedFindings.map((finding) => (
-                  <li
-                    key={`${finding.path}-${finding.line}-${finding.category}-${finding.severity}`}
-                    className="p-3 rounded-[var(--radius-panel)] bg-[var(--nav-hover)] flex flex-col gap-2"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={severityVariant(finding.severity)}>{finding.severity}</Badge>
-                      <Badge variant="neutral">{finding.category}</Badge>
-                      <code className="text-xs font-mono text-[var(--text-muted)] ml-auto">
-                        {finding.path}:{finding.line}
-                        {finding.endLine && finding.endLine !== finding.line ? `–${finding.endLine}` : ''}
-                      </code>
-                    </div>
-                    <p className="text-sm text-[var(--text)] leading-relaxed">{finding.comment}</p>
-                    {finding.suggestion && (
-                      <pre className="text-xs whitespace-pre-wrap break-words p-2 rounded bg-[var(--glass-bg)] border border-[var(--glass-border)] text-[var(--text-muted)] font-mono leading-relaxed">
-                        {finding.suggestion}
-                      </pre>
-                    )}
-                    <div className="flex gap-3 text-xs text-[var(--text-muted)]">
-                      {finding.blocking && <span className="text-[oklch(0.50_0.20_25)]">blocking</span>}
-                      {finding.posted && <span className="text-[oklch(0.50_0.15_142)]">posted</span>}
-                    </div>
+                  <li key={`${finding.path}-${finding.line}-${finding.category}-${finding.severity}`}>
+                    <FindingCard
+                      severity={finding.severity}
+                      category={finding.category}
+                      location={`${finding.path}:${finding.line}${
+                        finding.endLine && finding.endLine !== finding.line ? `–${finding.endLine}` : ''
+                      }`}
+                      comment={finding.comment}
+                      suggestion={finding.suggestion}
+                      blocking={finding.blocking}
+                      posted={finding.posted}
+                    />
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           )}
         </Card>
       )}
 
       {aiCalls.length > 0 && (
-        <Card className="p-0 overflow-hidden">
-          <div className="p-4 border-b border-[var(--glass-border)]">
-            <h2 className="text-sm font-semibold text-[var(--text)]">
-              AI Calls ({aiCalls.length})
+        <section className="prr-table-card" aria-label="AI calls">
+          <div className="prr-table-toolbar">
+            <h2 className="prr-section-title">
+              AI calls <span className="prr-section-count">{aiCalls.length}</span>
             </h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="prr-table-scroll">
+            <table className="prr-table">
               <thead>
-                <tr className="border-b border-[var(--glass-border)] bg-[var(--nav-hover)]">
-                  <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-[var(--text-muted)]">Provider / Model</th>
-                  <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-[var(--text-muted)]">Purpose</th>
-                  <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-[var(--text-muted)] tabular-nums">Tokens</th>
-                  <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-[var(--text-muted)] tabular-nums">Cost</th>
-                  <th scope="col" className="px-4 py-2.5 text-right text-xs font-medium text-[var(--text-muted)] tabular-nums">Latency</th>
-                  <th scope="col" className="px-4 py-2.5 text-left text-xs font-medium text-[var(--text-muted)]">Status</th>
+                <tr>
+                  <th scope="col">Provider / model</th>
+                  <th scope="col">Purpose</th>
+                  <th scope="col" className="is-right">Tokens</th>
+                  <th scope="col" className="is-right">Cost</th>
+                  <th scope="col" className="is-right">Latency</th>
+                  <th scope="col">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--glass-border)]">
+              <tbody>
                 {aiCalls.map((call) => (
                   <React.Fragment key={call._id}>
-                    <tr className="hover:bg-[var(--nav-hover)] transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-[var(--text)]">{call.provider}</div>
-                        <div className="text-xs text-[var(--text-muted)] font-mono">{call.model}</div>
+                    <tr>
+                      <td>
+                        <div className="prr-cell-title">{call.provider}</div>
+                        <code className="prr-cell-sub">{call.model}</code>
                       </td>
-                      <td className="px-4 py-3 text-[var(--text-muted)]">{call.purpose}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-[var(--text-muted)]">
-                        {call.promptTokens + call.completionTokens}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-[var(--text-muted)]">
-                        {formatCost(call.costUsd)}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-[var(--text-muted)]">
-                        {formatMs(call.latencyMs)}
-                      </td>
-                      <td className="px-4 py-3">
+                      <td className="is-muted">{call.purpose}</td>
+                      <td className="is-right is-mono">{(call.promptTokens + call.completionTokens).toLocaleString()}</td>
+                      <td className="is-right is-mono">{formatCost(call.costUsd)}</td>
+                      <td className="is-right is-mono">{formatMs(call.latencyMs)}</td>
+                      <td>
                         <Badge variant={call.status === 'ok' ? 'success' : 'error'}>
-                          {call.status}
+                          {call.status === 'ok' ? '✓ ok' : '✕ error'}
                         </Badge>
                       </td>
                     </tr>
-                    <tr>
-                      <td colSpan={6} className="px-0 py-0">
-                        <details className="group">
-                          <summary className="cursor-pointer px-4 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--nav-hover)] select-none list-none flex items-center gap-1.5 transition-colors">
-                            <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
-                            Show prompt &amp; response
-                          </summary>
-                          <div className="px-4 pb-3 flex flex-col gap-2">
-                            {call.errorMessage && (
-                              <p className="text-xs text-[oklch(0.50_0.20_25)]">Error: {call.errorMessage}</p>
-                            )}
-                            <div>
-                              <p className="text-xs font-medium text-[var(--text-muted)] mb-1">Prompt</p>
-                              <pre className="text-xs whitespace-pre-wrap break-words p-3 rounded-[var(--radius-panel)] bg-[var(--glass-bg)] border border-[var(--glass-border)] text-[var(--text)] font-mono leading-relaxed max-h-64 overflow-y-auto">
-                                {call.prompt}
-                              </pre>
-                            </div>
-                            <div>
-                              <p className="text-xs font-medium text-[var(--text-muted)] mb-1">Response</p>
-                              <pre className="text-xs whitespace-pre-wrap break-words p-3 rounded-[var(--radius-panel)] bg-[var(--glass-bg)] border border-[var(--glass-border)] text-[var(--text)] font-mono leading-relaxed max-h-64 overflow-y-auto">
-                                {call.response}
-                              </pre>
-                            </div>
-                          </div>
-                        </details>
+                    <tr className={styles.detailRow}>
+                      <td colSpan={6}>
+                        <Disclosure summary="Show prompt & response">
+                          {call.errorMessage && <p className="prr-error">{call.errorMessage}</p>}
+                          <CodeBlock label="Prompt" maxHeight={256}>
+                            {call.prompt}
+                          </CodeBlock>
+                          <CodeBlock label="Response" maxHeight={256}>
+                            {call.response}
+                          </CodeBlock>
+                        </Disclosure>
                       </td>
                     </tr>
                   </React.Fragment>
@@ -544,8 +441,8 @@ export default function RequestDetailPage(): React.ReactElement {
               </tbody>
             </table>
           </div>
-        </Card>
+        </section>
       )}
-    </div>
+    </>
   );
 }

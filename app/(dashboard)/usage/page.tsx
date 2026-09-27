@@ -3,25 +3,21 @@
 import * as React from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip as RTooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts';
-import { Download } from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { Icon } from '@/components/ui/Icon';
 import { Select } from '@/components/ui/Select';
 import type { SelectOption } from '@/components/ui/Select';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { Grid } from '@/components/layout/Grid';
+import { SummaryCard } from '@/components/dashboard/StatCard';
+import { DataTable, type Column } from '@/components/data/DataTable';
+import { ErrorState } from '@/components/data/States';
+import { BarChart } from '@/components/charts/BarChart';
+import { LineChart } from '@/components/charts/LineChart';
+import { ChartCard } from '@/components/charts/ChartParts';
 
 type GroupBy = 'model' | 'repo' | 'day';
 
@@ -72,181 +68,83 @@ function isGroupBy(value: string | null): value is GroupBy {
   return value !== null && VALID_GROUP_BY.has(value as GroupBy);
 }
 
+const GROUP_LABEL: Record<GroupBy, string> = { day: 'day', model: 'model', repo: 'repo' };
+
+function ErrorRate({ rate }: { rate: number }): React.ReactElement {
+  const pct = `${(rate * 100).toFixed(1)}%`;
+  if (rate > 0.1) return <Badge variant="error">✕ {pct}</Badge>;
+  if (rate > 0.05) return <Badge variant="warning">! {pct}</Badge>;
+  return <>{pct}</>;
+}
+
+const COLUMNS: Column<UsageRow>[] = [
+  { key: 'group', header: 'Group', render: (r) => <code>{r.group}</code> },
+  { key: 'calls', header: 'Calls', align: 'right', mono: true, render: (r) => fmt(r.calls) },
+  { key: 'promptTokens', header: 'Prompt tokens', align: 'right', mono: true, render: (r) => fmt(r.promptTokens) },
+  {
+    key: 'completionTokens',
+    header: 'Completion tokens',
+    align: 'right',
+    mono: true,
+    render: (r) => fmt(r.completionTokens),
+  },
+  { key: 'cost', header: 'Cost', align: 'right', mono: true, render: (r) => fmtCost(r.costUsd) },
+  {
+    key: 'latency',
+    header: 'Avg latency (ms)',
+    align: 'right',
+    mono: true,
+    render: (r) => fmt(Math.round(r.avgLatencyMs)),
+  },
+  { key: 'errorRate', header: 'Error rate', align: 'right', mono: true, render: (r) => <ErrorRate rate={r.errorRate} /> },
+];
+
+function UsageChart({ rows, groupBy }: { rows: UsageRow[]; groupBy: GroupBy }): React.ReactElement {
+  const title = `Cost by ${GROUP_LABEL[groupBy]}`;
+  return (
+    <ChartCard title={title}>
+      {groupBy === 'day' ? (
+        <LineChart
+          data={rows.map((r) => ({ label: r.group, value: r.costUsd }))}
+          format={fmtCost}
+          seriesLabel="Cost"
+          ariaLabel={`Line chart: ${title}`}
+        />
+      ) : (
+        <BarChart
+          data={rows.map((r) => ({ label: r.group, cost: r.costUsd }))}
+          series={[{ key: 'cost', label: 'Cost', tone: 'accent' }]}
+          format={fmtCost}
+          legend={false}
+          ariaLabel={`Bar chart: ${title}`}
+        />
+      )}
+    </ChartCard>
+  );
+}
+
+function SummarySkeleton(): React.ReactElement {
+  return (
+    <Grid variant="stats">
+      <SummaryCard label="Total cost" loading />
+      <SummaryCard label="Total calls" loading />
+      <SummaryCard label="Prompt tokens" loading />
+      <SummaryCard label="Completion tokens" loading />
+    </Grid>
+  );
+}
+
+const HEADER_TEXT = { title: 'AI usage', description: 'Token consumption and cost breakdown.' };
+
 function UsageSkeleton(): React.ReactElement {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Card key={i}>
-            <Skeleton className="mb-2 h-4 w-24" />
-            <Skeleton className="h-8 w-32" />
-          </Card>
-        ))}
-      </div>
-      <Card>
-        <Skeleton className="h-72 w-full" />
-      </Card>
-      <Card className="p-0">
-        <Skeleton className="h-64 w-full rounded-[var(--radius-card)]" />
-      </Card>
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}): React.ReactElement {
-  return (
-    <Card>
-      <p className="text-sm font-medium text-[var(--text-muted)]">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-[var(--text)]">
-        {value}
-      </p>
-    </Card>
-  );
-}
-
-type ChartDatum = { name: string; cost: number };
-
-const TOOLTIP_STYLE = {
-  background: 'var(--glass-bg-solid)',
-  border: '1px solid var(--glass-border)',
-  borderRadius: '8px',
-  color: 'var(--text)',
-  fontSize: '12px',
-} as const;
-
-function tooltipFormatter(
-  value: number | string | readonly (string | number)[] | undefined,
-): [string, string] {
-  return [`$${Number(value ?? 0).toFixed(4)}`, 'Cost'];
-}
-
-function yAxisFormatter(value: number | string): string {
-  return `$${Number(value).toFixed(2)}`;
-}
-
-function UsageChart({
-  rows,
-  groupBy,
-}: {
-  rows: UsageRow[];
-  groupBy: GroupBy;
-}): React.ReactElement {
-  const chartData: ChartDatum[] = rows.map((r) => ({ name: r.group, cost: r.costUsd }));
-  const labelId = 'usage-chart-title';
-  const axisProps = {
-    axisLine: false as const,
-    tickLine: false as const,
-    tick: { fontSize: 12, fill: 'var(--text-muted)' },
-  };
-
-  return (
-    <Card>
-      <h2
-        id={labelId}
-        className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--text-muted)]"
-      >
-        Cost by{' '}
-        {groupBy === 'day' ? 'Day' : groupBy === 'model' ? 'Model' : 'Repo'}
-      </h2>
-      <div role="img" aria-labelledby={labelId} className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          {groupBy === 'day' ? (
-            <LineChart
-              data={chartData}
-              margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" />
-              <XAxis dataKey="name" {...axisProps} />
-              <YAxis
-                {...axisProps}
-                tickFormatter={yAxisFormatter}
-                width={60}
-              />
-              <RTooltip
-                formatter={tooltipFormatter}
-                contentStyle={TOOLTIP_STYLE}
-                cursor={{ stroke: 'var(--accent)', strokeWidth: 1, strokeDasharray: '4 2' }}
-              />
-              <Line
-                type="monotone"
-                dataKey="cost"
-                stroke="var(--accent)"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, fill: 'var(--accent)' }}
-              />
-            </LineChart>
-          ) : (
-            <BarChart
-              data={chartData}
-              margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--glass-border)" />
-              <XAxis dataKey="name" {...axisProps} />
-              <YAxis
-                {...axisProps}
-                tickFormatter={yAxisFormatter}
-                width={60}
-              />
-              <RTooltip
-                formatter={tooltipFormatter}
-                contentStyle={TOOLTIP_STYLE}
-                cursor={{ fill: 'var(--accent)', opacity: 0.08 }}
-              />
-              <Bar
-                dataKey="cost"
-                fill="var(--accent)"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-    </Card>
-  );
-}
-
-function UsageTableRow({ row }: { row: UsageRow }): React.ReactElement {
-  const errorPct = row.errorRate * 100;
-  const isHighError = row.errorRate > 0.1;
-  const isModerateError = row.errorRate > 0.05;
-
-  return (
-    <tr className="border-t border-[var(--glass-border)] transition-colors hover:bg-[var(--nav-hover)]">
-      <td className="px-4 py-3 text-sm text-[var(--text)]">{row.group}</td>
-      <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text)]">
-        {fmt(row.calls)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text)]">
-        {fmt(row.promptTokens)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text)]">
-        {fmt(row.completionTokens)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text)]">
-        {fmtCost(row.costUsd)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-sm text-[var(--text)]">
-        {fmt(Math.round(row.avgLatencyMs))}
-      </td>
-      <td className="px-4 py-3 text-right">
-        {isModerateError ? (
-          <Badge variant={isHighError ? 'error' : 'warning'}>
-            {errorPct.toFixed(1)}%
-          </Badge>
-        ) : (
-          <span className="tabular-nums text-sm text-[var(--text-muted)]">
-            {errorPct.toFixed(1)}%
-          </span>
-        )}
-      </td>
-    </tr>
+    <>
+      <PageHeader {...HEADER_TEXT} />
+      <SummarySkeleton />
+      <ChartCard title="Cost">
+        <Skeleton style={{ height: 240 }} />
+      </ChartCard>
+    </>
   );
 }
 
@@ -264,7 +162,7 @@ function UsageContent(): React.ReactElement {
 
   const apiUrl = `/api/dashboard/usage?days=${days}&groupBy=${groupBy}`;
 
-  const { data, error, isLoading } = useSWR<UsageSummary, FetchError>(
+  const { data, error, isLoading, mutate } = useSWR<UsageSummary, FetchError>(
     apiUrl,
     fetcher,
   );
@@ -286,116 +184,64 @@ function UsageContent(): React.ReactElement {
     document.body.removeChild(anchor);
   }
 
-  const errorMessage = error?.message ?? 'Failed to load usage data';
-
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-[var(--text)]">AI Usage</h1>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">
-            Token consumption and cost breakdown
-          </p>
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <Select
-            label="Group by"
-            value={groupBy}
-            options={GROUP_OPTIONS}
-            onChange={(e) => updateParams({ groupBy: e.target.value as GroupBy })}
-          />
-          <Select
-            label="Period"
-            value={String(days)}
-            options={DAYS_OPTIONS}
-            onChange={(e) => updateParams({ days: parseInt(e.target.value, 10) })}
-          />
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleExportCsv}
-            aria-label="Export usage data as CSV"
-            className="mb-0.5"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            Export CSV
-          </Button>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        {...HEADER_TEXT}
+        actions={
+          <>
+            <Select
+              label="Group by"
+              value={groupBy}
+              options={GROUP_OPTIONS}
+              onChange={(e) => updateParams({ groupBy: e.target.value as GroupBy })}
+              containerClassName="prr-w160"
+            />
+            <Select
+              label="Period"
+              value={String(days)}
+              options={DAYS_OPTIONS}
+              onChange={(e) => updateParams({ days: parseInt(e.target.value, 10) })}
+              containerClassName="prr-w160"
+            />
+            <Button variant="secondary" onClick={handleExportCsv} aria-label="Export usage data as CSV">
+              <Icon name="download" />
+              Export CSV
+            </Button>
+          </>
+        }
+      />
 
-      {isLoading && <UsageSkeleton />}
+      {isLoading && <SummarySkeleton />}
 
       {!isLoading && error && (
-        <Card>
-          <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
-            {errorMessage}
-          </p>
-        </Card>
+        <ErrorState title="Could not load usage" message={error.message || 'Failed to load usage data'} onRetry={() => void mutate()} />
       )}
 
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <SummaryCard label="Total Cost" value={fmtCost(data.totalCost)} />
-            <SummaryCard label="Total Calls" value={fmt(data.totalCalls)} />
-            <SummaryCard
-              label="Prompt Tokens"
-              value={fmt(data.totalPromptTokens)}
-            />
-            <SummaryCard
-              label="Completion Tokens"
-              value={fmt(data.totalCompletionTokens)}
-            />
-          </div>
+          <Grid variant="stats">
+            <SummaryCard label="Total cost" value={fmtCost(data.totalCost)} />
+            <SummaryCard label="Total calls" value={fmt(data.totalCalls)} />
+            <SummaryCard label="Prompt tokens" value={fmt(data.totalPromptTokens)} />
+            <SummaryCard label="Completion tokens" value={fmt(data.totalCompletionTokens)} />
+          </Grid>
 
-          {data.rows.length > 0 && (
-            <UsageChart rows={data.rows} groupBy={groupBy} />
-          )}
-
-          <Card className="overflow-hidden p-0">
-            {data.rows.length === 0 ? (
-              <div className="flex items-center justify-center py-16 text-sm text-[var(--text-muted)]">
-                No usage data for this period
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table
-                  className="w-full min-w-[640px]"
-                  aria-label="Usage breakdown table"
-                >
-                  <thead>
-                    <tr className="border-b border-[var(--glass-border)]">
-                      {[
-                        { label: 'Group', align: 'left' },
-                        { label: 'Calls', align: 'right' },
-                        { label: 'Prompt Tokens', align: 'right' },
-                        { label: 'Completion Tokens', align: 'right' },
-                        { label: 'Cost ($)', align: 'right' },
-                        { label: 'Avg Latency (ms)', align: 'right' },
-                        { label: 'Error Rate', align: 'right' },
-                      ].map(({ label, align }) => (
-                        <th
-                          key={label}
-                          scope="col"
-                          className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] text-${align}`}
-                        >
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.rows.map((row) => (
-                      <UsageTableRow key={row.group} row={row} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
+          {data.rows.length > 0 && <UsageChart rows={data.rows} groupBy={groupBy} />}
         </>
       )}
-    </div>
+
+      {!error && (
+        <DataTable
+          caption="Usage breakdown"
+          columns={COLUMNS}
+          rows={data?.rows ?? []}
+          rowKey={(r) => r.group}
+          loading={isLoading}
+          empty={{ title: 'No usage data for this period', description: 'AI calls made by reviews show up here.' }}
+        />
+      )}
+    </>
   );
 }
 

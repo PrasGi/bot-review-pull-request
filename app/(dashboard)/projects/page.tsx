@@ -3,17 +3,23 @@
 import * as React from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR, { mutate as globalMutate } from 'swr';
-import { FolderGit2, GitFork, Building2, User, AlertTriangle, Plus, Link2, Search, Clock, RefreshCw } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Switch } from '@/components/ui/Switch';
+import { buttonClass } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { toast } from '@/components/ui/Toast';
 import { Input } from '@/components/ui/Input';
+import { PageHeader, SectionHeading } from '@/components/layout/PageHeader';
+import { Grid } from '@/components/layout/Grid';
+import { EmptyState, ErrorState } from '@/components/data/States';
+import { Pagination } from '@/components/data/Pagination';
+import { AccountCard } from '@/components/projects/AccountCard';
+import { RepoGroup, RepoRow } from '@/components/projects/RepoGroup';
 import { fetcher, mutateJson, FetchError } from '@/lib/ui/swr';
 import { RepoConfigDialog } from './RepoConfigDialog';
 import type { RepoConfig } from './RepoConfigDialog';
+import styles from './page.module.css';
 
 type Installation = {
   installationId: number;
@@ -60,36 +66,7 @@ type ReposResponse = {
   repos: Repo[];
 };
 
-function AccountAvatar({ account }: { account: Account }): React.ReactElement {
-  const initial = (
-    (account.displayName ?? '').charAt(0) ||
-    (account.githubLogin ?? '').charAt(0) ||
-    '?'
-  ).toUpperCase();
-
-  if (account.avatarUrl) {
-    return (
-      <img
-        src={account.avatarUrl}
-        alt={account.displayName}
-        width={40}
-        height={40}
-        className="h-10 w-10 rounded-full object-cover ring-2 ring-[var(--glass-border)] shrink-0"
-      />
-    );
-  }
-
-  return (
-    <div
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-semibold select-none"
-      aria-hidden="true"
-    >
-      {initial}
-    </div>
-  );
-}
-
-function AccountCard({
+function ConnectedAccount({
   account,
   onResynced,
 }: {
@@ -101,10 +78,7 @@ function AccountCard({
   const handleResync = async (): Promise<void> => {
     setSyncing(true);
     try {
-      const res = await mutateJson<{ repoCount: number }>(
-        `/api/dashboard/accounts/${account.id}/resync`,
-        'POST'
-      );
+      const res = await mutateJson<{ repoCount: number }>(`/api/dashboard/accounts/${account.id}/resync`, 'POST');
       toast.success('Re-sync complete', `${res.repoCount} repositories synced.`);
       await onResynced();
     } catch (e) {
@@ -116,84 +90,38 @@ function AccountCard({
   };
 
   return (
-    <Card hoverLift className="flex flex-col gap-4">
-      <div className="flex items-start gap-3">
-        <AccountAvatar account={account} />
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-[var(--text)] truncate">
-              {account.displayName}
-            </span>
-            {account.reconnectRequired && (
-              <Badge variant="warning">
-                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-                Reconnect required
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-[var(--text-muted)]">@{account.githubLogin}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <span className="text-xs text-[var(--text-muted)] tabular-nums">
-            {account.repoCount} {account.repoCount === 1 ? 'repo' : 'repos'}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleResync}
-            loading={syncing}
-            disabled={account.reconnectRequired}
-            aria-label={`Re-sync ${account.githubLogin}`}
-          >
-            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-            Re-sync
-          </Button>
-        </div>
-      </div>
-
-      {account.installations.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {account.installations.map((inst) => (
-            <a
-              key={inst.installationId}
-              href={inst.manageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 glass-btn px-2.5 py-1 text-xs text-[var(--text-muted)] hover:text-[var(--text)] transition-colors rounded-[var(--radius-btn)]"
-            >
-              {inst.accountType === 'Organization' ? (
-                <Building2 className="h-3 w-3 shrink-0" aria-hidden="true" />
-              ) : (
-                <User className="h-3 w-3 shrink-0" aria-hidden="true" />
-              )}
-              {inst.accountLogin}
-            </a>
-          ))}
-        </div>
-      )}
-    </Card>
+    <AccountCard
+      displayName={account.displayName}
+      login={account.githubLogin}
+      avatarUrl={account.avatarUrl}
+      repoCount={account.repoCount}
+      reconnectRequired={account.reconnectRequired}
+      syncing={syncing}
+      onResync={handleResync}
+      installations={account.installations.map((inst) => ({
+        login: inst.accountLogin,
+        type: inst.accountType,
+        href: inst.manageUrl,
+      }))}
+    />
   );
 }
 
 function AccountsSkeleton(): React.ReactElement {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <Grid variant="pair" role="status" aria-label="Loading accounts">
       {[0, 1].map((i) => (
         <Card key={i}>
-          <div className="flex items-center gap-3 mb-4">
-            <Skeleton className="h-10 w-10 rounded-full shrink-0" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-36" />
-              <Skeleton className="h-3 w-24" />
+          <div className={styles.skeletonRow}>
+            <Skeleton style={{ width: 40, height: 40 }} />
+            <div className={styles.skeletonLines}>
+              <Skeleton style={{ width: 144, height: 14 }} />
+              <Skeleton style={{ width: 96, height: 12 }} />
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-6 w-20 rounded-full" />
-            <Skeleton className="h-6 w-20 rounded-full" />
           </div>
         </Card>
       ))}
-    </div>
+    </Grid>
   );
 }
 
@@ -226,114 +154,91 @@ function AccountsSection(): React.ReactElement {
     }
   }, [connectStatus]);
 
+  const connectLink = data?.connectUrl ? (
+    <a href={data.connectUrl} className={buttonClass('secondary', 'sm')}>
+      <Icon name="link" size={14} />
+      Connect GitHub account
+    </a>
+  ) : null;
+
   return (
     <section aria-labelledby="accounts-heading">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2
-          id="accounts-heading"
-          className="text-lg font-semibold text-[var(--text)]"
-        >
-          Connected Accounts
-        </h2>
-        {data?.connectUrl && (
-          <Button asChild variant="secondary" size="sm">
-            <a href={data.connectUrl}>
-              <Link2 className="h-4 w-4" aria-hidden="true" />
-              Connect GitHub account
-            </a>
-          </Button>
-        )}
-      </div>
+      <SectionHeading action={data && data.accounts.length > 0 ? connectLink : null}>
+        <span id="accounts-heading">Connected accounts</span>
+      </SectionHeading>
 
       {isLoading && <AccountsSkeleton />}
 
       {error instanceof Error && (
-        <Card>
-          <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
-            {error instanceof FetchError ? error.message : 'Failed to load accounts'}
-          </p>
-        </Card>
+        <ErrorState
+          title="Could not load accounts"
+          message={error instanceof FetchError ? error.message : 'Failed to load accounts'}
+          onRetry={() => void mutate()}
+        />
       )}
 
       {data && data.accounts.length === 0 && (
-        <Card className="flex flex-col items-center gap-4 py-12 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-subtle)]">
-            <FolderGit2 className="h-6 w-6 text-[var(--accent)]" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="font-medium text-[var(--text)]">No accounts connected yet</p>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Connect a GitHub account to start reviewing pull requests.
-            </p>
-          </div>
-          <Button asChild>
-            <a href={data.connectUrl}>
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Connect GitHub account
-            </a>
-          </Button>
+        <Card>
+          <EmptyState
+            icon="folder"
+            title="No accounts connected yet"
+            description="Connect a GitHub account to start reviewing pull requests."
+            action={
+              <a href={data.connectUrl} className={buttonClass('primary')}>
+                <Icon name="plus" />
+                Connect GitHub account
+              </a>
+            }
+          />
         </Card>
       )}
 
       {data && data.accounts.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <Grid variant="pair">
           {data.accounts.map((account) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              onResynced={handleResynced}
-            />
+            <ConnectedAccount key={account.id} account={account} onResynced={handleResynced} />
           ))}
-        </div>
+        </Grid>
       )}
 
       {data && data.pendingInstallations.length > 0 && (
-        <div className="mt-4 flex flex-col gap-3">
-          <h3 className="text-sm font-medium text-[var(--text-muted)]">
-            Pending owner approval
-          </h3>
-          <div className="grid gap-3 sm:grid-cols-2">
+        <div className={styles.pending}>
+          <h3 className="prr-label">Pending owner approval</h3>
+          <Grid variant="pair">
             {data.pendingInstallations.map((p) => (
-              <div
-                key={p.accountLogin}
-                className="flex items-start gap-3 rounded-xl border border-[oklch(0.80_0.12_85/0.3)] bg-[oklch(0.80_0.12_85/0.08)] p-4"
-              >
-                <Clock
-                  className="mt-0.5 h-4 w-4 shrink-0 text-[oklch(0.55_0.14_85)]"
-                  aria-hidden="true"
-                />
-                <div className="flex flex-col gap-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-[var(--text)] truncate">
-                      {p.accountLogin}
-                    </span>
-                    <Badge variant="warning">Awaiting approval</Badge>
+              <div key={p.accountLogin} className="prr-attn prr-attn--warning">
+                <span className="prr-attn-icon" aria-hidden="true">
+                  <Icon name="clock" />
+                </span>
+                <div className="prr-attn-body">
+                  <div className={styles.pendingTitle}>
+                    <code className="prr-attn-title">{p.accountLogin}</code>
+                    <Badge variant="warning">! Awaiting approval</Badge>
                   </div>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    Requested by @{p.requesterLogin} ·{' '}
-                    {new Date(p.requestedAt).toLocaleDateString()}
+                  <p className="prr-hint">
+                    Requested by @{p.requesterLogin} · {new Date(p.requestedAt).toLocaleDateString()}
                   </p>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    An owner of {p.accountLogin} must approve the GitHub App
-                    installation. It appears here automatically once approved.
+                  <p className="prr-hint">
+                    An owner of {p.accountLogin} must approve the GitHub App installation. It appears here
+                    automatically once approved.
                   </p>
                 </div>
               </div>
             ))}
-          </div>
+          </Grid>
         </div>
       )}
     </section>
   );
 }
 
-type RepoRowProps = {
+type RepoItemProps = {
   repo: Repo;
   onToggle: (id: string, enabled: boolean) => Promise<void>;
   onConfigSaved: () => void;
 };
 
-function RepoRow({ repo, onToggle, onConfigSaved }: RepoRowProps): React.ReactElement {
+function RepoItem({ repo, onToggle, onConfigSaved }: RepoItemProps): React.ReactElement {
   const [toggling, setToggling] = React.useState(false);
   const [configOpen, setConfigOpen] = React.useState(false);
 
@@ -348,46 +253,15 @@ function RepoRow({ repo, onToggle, onConfigSaved }: RepoRowProps): React.ReactEl
 
   return (
     <>
-      <div className="flex items-center gap-3 py-3 border-b border-[var(--glass-border)] last:border-0">
-        <GitFork
-          className="h-4 w-4 shrink-0 text-[var(--text-muted)]"
-          aria-hidden="true"
-        />
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span className="text-sm font-medium text-[var(--text)] truncate">
-            {repo.fullName}
-          </span>
-          {repo.removedFromInstallation && (
-            <Badge variant="neutral" className="shrink-0">
-              Removed
-            </Badge>
-          )}
-        </div>
-        {repo.lastEventAt && (
-          <time
-            dateTime={repo.lastEventAt}
-            className="text-xs text-[var(--text-muted)] shrink-0 hidden sm:block tabular-nums"
-          >
-            {new Date(repo.lastEventAt).toLocaleDateString()}
-          </time>
-        )}
-        <Switch
-          checked={repo.enabled}
-          onCheckedChange={handleToggle}
-          disabled={repo.removedFromInstallation || toggling}
-          aria-label={`${repo.enabled ? 'Disable' : 'Enable'} ${repo.fullName}`}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setConfigOpen(true)}
-          disabled={repo.removedFromInstallation}
-          aria-label={`Configure ${repo.fullName}`}
-        >
-          Configure
-        </Button>
-      </div>
-
+      <RepoRow
+        fullName={repo.fullName}
+        enabled={repo.enabled}
+        onEnabledChange={handleToggle}
+        toggling={toggling}
+        removed={repo.removedFromInstallation}
+        lastEventAt={repo.lastEventAt ? new Date(repo.lastEventAt).toLocaleDateString() : undefined}
+        onConfigure={() => setConfigOpen(true)}
+      />
       <RepoConfigDialog
         repoId={repo.id}
         repoFullName={repo.fullName}
@@ -400,57 +274,16 @@ function RepoRow({ repo, onToggle, onConfigSaved }: RepoRowProps): React.ReactEl
   );
 }
 
-type RepoGroupProps = {
-  accountLogin: string;
-  repos: Repo[];
-  onToggle: (id: string, enabled: boolean) => Promise<void>;
-  onConfigSaved: () => void;
-};
-
-function RepoGroup({
-  accountLogin,
-  repos,
-  onToggle,
-  onConfigSaved,
-}: RepoGroupProps): React.ReactElement {
-  return (
-    <div className="glass-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-[var(--glass-border)] flex items-center gap-2 bg-[var(--nav-hover)]">
-        <FolderGit2 className="h-4 w-4 text-[var(--text-muted)]" aria-hidden="true" />
-        <span className="text-sm font-semibold text-[var(--text-muted)]">
-          {accountLogin}
-        </span>
-        <Badge variant="neutral">{repos.length}</Badge>
-      </div>
-      <div className="px-5">
-        {repos.map((repo) => (
-          <RepoRow
-            key={repo.id}
-            repo={repo}
-            onToggle={onToggle}
-            onConfigSaved={onConfigSaved}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const PAGE_SIZE = 15;
 
 function ReposSkeleton(): React.ReactElement {
   return (
-    <div className="flex flex-col gap-4">
+    <div className={styles.groups} role="status" aria-label="Loading repositories">
       {[0, 1].map((i) => (
-        <Card key={i} className="flex flex-col gap-3">
-          <Skeleton className="h-4 w-28" />
+        <Card key={i}>
+          <Skeleton style={{ width: 112, height: 14, marginBottom: 16 }} />
           {[0, 1, 2].map((j) => (
-            <div key={j} className="flex items-center gap-3 py-2">
-              <Skeleton className="h-4 w-4 rounded" />
-              <Skeleton className="h-4 flex-1" />
-              <Skeleton className="h-5 w-9 rounded-full" />
-              <Skeleton className="h-8 w-20 rounded-[var(--radius-btn)]" />
-            </div>
+            <Skeleton key={j} style={{ height: 20, marginBottom: 12 }} />
           ))}
         </Card>
       ))}
@@ -540,26 +373,11 @@ function ReposSection(): React.ReactElement {
     return Array.from(map.entries());
   }, [filteredRepos, page]);
 
-  const showingFrom = totalFiltered === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const showingTo = Math.min(page * PAGE_SIZE, totalFiltered);
-
   return (
     <section aria-labelledby="repos-heading">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="repos-heading" className="text-lg font-semibold text-[var(--text)]">
-            Repositories
-          </h2>
-          <p className="mt-0.5 text-sm text-[var(--text-muted)]">
-            Manage per-repository review configuration.
-          </p>
-        </div>
-        {data && data.repos.length > 0 && (
-          <div className="relative w-full sm:w-72">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-muted)] pointer-events-none"
-              aria-hidden="true"
-            />
+      <SectionHeading
+        action={
+          data && data.repos.length > 0 ? (
             <Input
               key={q}
               id="repo-search"
@@ -567,94 +385,52 @@ function ReposSection(): React.ReactElement {
               placeholder="Search repositories…"
               defaultValue={q}
               onChange={handleSearchChange}
-              className="pl-9"
               aria-label="Search repositories"
+              containerClassName={styles.search}
             />
-          </div>
-        )}
-      </div>
+          ) : null
+        }
+      >
+        <span id="repos-heading">Repositories</span>
+      </SectionHeading>
 
       {isLoading && <ReposSkeleton />}
 
       {error instanceof Error && (
-        <Card>
-          <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">
-            {error instanceof FetchError
-              ? error.message
-              : 'Failed to load repositories'}
-          </p>
-        </Card>
+        <ErrorState
+          title="Could not load repositories"
+          message={error instanceof FetchError ? error.message : 'Failed to load repositories'}
+          onRetry={() => void mutate()}
+        />
       )}
 
       {data && data.repos.length === 0 && (
-        <Card className="flex flex-col items-center gap-4 py-12 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-subtle)]">
-            <GitFork className="h-6 w-6 text-[var(--accent)]" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="font-medium text-[var(--text)]">No repositories yet</p>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Connect an account and install the GitHub app to see repositories here.
-            </p>
-          </div>
+        <Card>
+          <EmptyState
+            icon="fork"
+            title="No repositories yet"
+            description="Connect an account and install the GitHub app to see repositories here."
+          />
         </Card>
       )}
 
       {data && data.repos.length > 0 && filteredRepos.length === 0 && (
-        <Card className="flex flex-col items-center gap-4 py-12 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--accent-subtle)]">
-            <Search className="h-6 w-6 text-[var(--accent)]" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="font-medium text-[var(--text)]">No repositories match</p>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Try a different search term.
-            </p>
-          </div>
+        <Card>
+          <EmptyState title="No repositories match" description="Try a different search term." />
         </Card>
       )}
 
       {data && filteredRepos.length > 0 && (
-        <>
-          <div className="flex flex-col gap-4">
-            {grouped.map(([accountLogin, repos]) => (
-              <RepoGroup
-                key={accountLogin}
-                accountLogin={accountLogin}
-                repos={repos}
-                onToggle={handleToggle}
-                onConfigSaved={handleConfigSaved}
-              />
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between mt-4 px-1">
-            <p className="text-xs text-[var(--text-muted)] tabular-nums">
-              Showing {showingFrom}–{showingTo} of {totalFiltered}{' '}
-              {totalFiltered === 1 ? 'repository' : 'repositories'}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => goToPage(page - 1)}
-                disabled={page <= 1}
-                aria-label="Previous page"
-              >
-                Prev
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => goToPage(page + 1)}
-                disabled={page >= totalPages}
-                aria-label="Next page"
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </>
+        <div className={styles.groups}>
+          {grouped.map(([accountLogin, repos]) => (
+            <RepoGroup key={accountLogin} title={accountLogin} count={repos.length}>
+              {repos.map((repo) => (
+                <RepoItem key={repo.id} repo={repo} onToggle={handleToggle} onConfigSaved={handleConfigSaved} />
+              ))}
+            </RepoGroup>
+          ))}
+          <Pagination page={page} totalPages={totalPages} total={totalFiltered} onPageChange={goToPage} />
+        </div>
       )}
     </section>
   );
@@ -662,15 +438,13 @@ function ReposSection(): React.ReactElement {
 
 export default function ProjectsPage(): React.ReactElement {
   return (
-    <div className="flex flex-col gap-10 px-4 py-8 max-w-4xl mx-auto w-full">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--text)]">Projects</h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Manage connected GitHub accounts and repository review configuration.
-        </p>
-      </div>
+    <>
+      <PageHeader
+        title="Projects"
+        description="Manage connected GitHub accounts and repository review configuration."
+      />
       <AccountsSection />
       <ReposSection />
-    </div>
+    </>
   );
 }

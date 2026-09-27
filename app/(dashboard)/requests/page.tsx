@@ -4,15 +4,18 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR from 'swr';
-import { ExternalLink } from 'lucide-react';
 import { fetcher, FetchError } from '@/lib/ui/swr';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Icon } from '@/components/ui/Icon';
 import { Select, type SelectChangeEvent } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { LiveIndicator } from '@/components/layout/Status';
+import { DataTable, type Column } from '@/components/data/DataTable';
+import { Pagination } from '@/components/data/Pagination';
+import { requestStatusTone, verdictTone } from '@/lib/ui/tones';
+import styles from './page.module.css';
 
 type RequestListItem = {
   id: string;
@@ -38,22 +41,6 @@ type RequestListResult = {
   page: number;
   pageSize: number;
 };
-
-type StatusVariant = 'success' | 'error' | 'info' | 'neutral';
-type VerdictVariant = 'success' | 'error' | 'neutral';
-
-function statusVariant(status: string): StatusVariant {
-  if (status === 'completed') return 'success';
-  if (status === 'failed') return 'error';
-  if (status === 'processing' || status === 'queued') return 'info';
-  return 'neutral';
-}
-
-function verdictVariant(verdict: string): VerdictVariant {
-  if (verdict === 'APPROVE') return 'success';
-  if (verdict === 'REQUEST_CHANGES') return 'error';
-  return 'neutral';
-}
 
 function formatCost(usd: number): string {
   return `$${usd.toFixed(4)}`;
@@ -100,32 +87,110 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
   { value: 'cancelled', label: 'Cancelled' },
-  { value: 'skipped_draft', label: 'Skipped (Draft)' },
+  { value: 'skipped_draft', label: 'Skipped (draft)' },
   { value: 'superseded', label: 'Superseded' },
 ];
 
 const PAGE_SIZE = 20;
-const SKELETON_KEYS = ['sk-a', 'sk-b', 'sk-c', 'sk-d', 'sk-e', 'sk-f'] as const;
 
-function SkeletonRows(): React.ReactElement {
-  return (
-    <>
-      {SKELETON_KEYS.map((key) => (
-        <tr key={key}>
-          <td className="px-4 py-3.5">
-            <Skeleton className="h-4 w-56 mb-2" />
-            <Skeleton className="h-3 w-40" />
-          </td>
-          <td className="px-4 py-3.5"><Skeleton className="h-5 w-20 rounded-full" /></td>
-          <td className="px-4 py-3.5"><Skeleton className="h-5 w-24 rounded-full" /></td>
-          <td className="px-4 py-3.5"><Skeleton className="h-4 w-14" /></td>
-          <td className="px-4 py-3.5"><Skeleton className="h-4 w-16" /></td>
-          <td className="px-4 py-3.5"><Skeleton className="h-4 w-16" /></td>
-        </tr>
-      ))}
-    </>
-  );
+function isInFlight(status: string): boolean {
+  return status === 'processing' || status === 'queued';
 }
+
+const COLUMNS: Column<RequestListItem>[] = [
+  {
+    key: 'pr',
+    header: 'Pull request',
+    render: (item) => (
+      <div className={styles.prCell}>
+        <div className={styles.prTitleRow}>
+          <Link href={`/requests/${item.id}`} className={`prr-cell-title ${styles.prTitle}`}>
+            #{item.prNumber} {item.prTitle}
+          </Link>
+          <a
+            href={item.prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open PR #${item.prNumber} on GitHub (opens in new tab)`}
+            className={styles.external}
+          >
+            <Icon name="external" size={14} />
+          </a>
+        </div>
+        <div className="prr-cell-sub">
+          <code className={styles.repo}>{item.repoFullName}</code>
+          <span aria-hidden="true">·</span>
+          <span>@{item.prAuthor}</span>
+          <span aria-hidden="true">·</span>
+          <Badge variant="neutral">{item.kind.replace(/_/g, ' ')}</Badge>
+        </div>
+      </div>
+    ),
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    render: (item) => (
+      <Badge
+        variant={requestStatusTone(item.status)}
+        className={isInFlight(item.status) ? 'is-live' : undefined}
+      >
+        {item.status.replace(/_/g, ' ')}
+      </Badge>
+    ),
+  },
+  {
+    key: 'verdict',
+    header: 'Verdict',
+    render: (item) =>
+      item.verdict ? (
+        <Badge variant={verdictTone(item.verdict)}>{item.verdict}</Badge>
+      ) : (
+        <span className="prr-hint">—</span>
+      ),
+  },
+  {
+    key: 'duration',
+    header: 'Duration',
+    mono: true,
+    muted: true,
+    render: (item) =>
+      item.durationMs !== undefined ? (
+        <Tooltip
+          content={
+            item.finishedAt
+              ? `${formatDateAbsolute(item.createdAt)} → ${formatDateAbsolute(item.finishedAt)}`
+              : formatDateAbsolute(item.createdAt)
+          }
+        >
+          <span tabIndex={0}>{formatDuration(item.durationMs)}</span>
+        </Tooltip>
+      ) : isInFlight(item.status) ? (
+        'running…'
+      ) : (
+        '—'
+      ),
+  },
+  {
+    key: 'cost',
+    header: 'Cost',
+    align: 'right',
+    mono: true,
+    render: (item) => formatCost(item.costUsd),
+  },
+  {
+    key: 'created',
+    header: 'Created',
+    muted: true,
+    render: (item) => (
+      <Tooltip content={formatDateAbsolute(item.createdAt)}>
+        <time dateTime={item.createdAt} tabIndex={0}>
+          {formatDate(item.createdAt)}
+        </time>
+      </Tooltip>
+    ),
+  },
+];
 
 export default function RequestsPage(): React.ReactElement {
   const router = useRouter();
@@ -187,202 +252,54 @@ export default function RequestsPage(): React.ReactElement {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-[var(--text)]">Review Requests</h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            All PR review requests across your repositories
-          </p>
-        </div>
-        <div
-          role="status"
-          className="flex items-center gap-1.5 self-center"
-          aria-label="Auto-refreshing every 5 seconds"
-        >
-          <span className="relative flex h-2 w-2" aria-hidden="true">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[oklch(0.70_0.15_142)] opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[oklch(0.60_0.15_142)]" />
-          </span>
-          <span className="text-xs text-[var(--text-muted)]">Live · updates every 5s</span>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title="Review requests"
+        description="All PR review requests across your repositories."
+        actions={<LiveIndicator ariaLabel="Auto-refreshing every 5 seconds" />}
+      />
 
-      <Card className="p-0 overflow-hidden">
-        <div className="flex flex-wrap gap-3 items-end p-4 border-b border-[var(--glass-border)]">
-          <Select
-            label="Status"
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={handleStatusChange}
-            containerClassName="min-w-[160px]"
-          />
-          <Input
-            key={search}
-            label="Search"
-            type="search"
-            placeholder="PR title, author, number…"
-            defaultValue={search}
-            onChange={handleSearchChange}
-            containerClassName="flex-1 min-w-[200px]"
-          />
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--glass-border)] bg-[var(--nav-hover)]">
-                <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
-                  Pull Request
-                </th>
-                <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
-                  Status
-                </th>
-                <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
-                  Verdict
-                </th>
-                <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
-                  Duration
-                </th>
-                <th scope="col" className="px-4 py-3 text-right font-medium text-[var(--text-muted)] tabular-nums">
-                  Cost
-                </th>
-                <th scope="col" className="px-4 py-3 text-left font-medium text-[var(--text-muted)]">
-                  Created
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--glass-border)]">
-              {isLoading ? (
-                <SkeletonRows />
-              ) : error ? null : data && data.items.length === 0 ? null : (
-                data?.items.map((item) => {
-                  const inFlight = item.status === 'processing' || item.status === 'queued';
-                  return (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-[var(--nav-hover)] transition-colors group"
-                    >
-                      <td className="px-4 py-3.5 max-w-sm">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <Link
-                            href={`/requests/${item.id}`}
-                            className="font-medium text-[var(--text)] hover:text-[var(--accent)] transition-colors truncate"
-                          >
-                            #{item.prNumber} {item.prTitle}
-                          </Link>
-                          <a
-                            href={item.prUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`Open PR #${item.prNumber} on GitHub (opens in new tab)`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="shrink-0 text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                          </a>
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-[var(--text-muted)]">
-                          <span className="truncate max-w-[180px]">{item.repoFullName}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>@{item.prAuthor}</span>
-                          <span aria-hidden="true">·</span>
-                          <Badge variant="neutral">{item.kind.replace(/_/g, ' ')}</Badge>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge
-                          variant={statusVariant(item.status)}
-                          className={inFlight ? 'animate-pulse' : undefined}
-                        >
-                          {item.status.replace(/_/g, ' ')}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {item.verdict ? (
-                          <Badge variant={verdictVariant(item.verdict)}>
-                            {item.verdict.replace(/_/g, ' ')}
-                          </Badge>
-                        ) : (
-                          <span className="text-[var(--text-muted)]">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 tabular-nums text-[var(--text-muted)] whitespace-nowrap">
-                        {item.durationMs !== undefined ? (
-                          <Tooltip
-                            content={
-                              item.finishedAt
-                                ? `${formatDateAbsolute(item.createdAt)} → ${formatDateAbsolute(item.finishedAt)}`
-                                : formatDateAbsolute(item.createdAt)
-                            }
-                          >
-                            <span>{formatDuration(item.durationMs)}</span>
-                          </Tooltip>
-                        ) : inFlight ? (
-                          <span className="italic text-xs">running…</span>
-                        ) : (
-                          <span>—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-[var(--text-muted)]">
-                        {formatCost(item.costUsd)}
-                      </td>
-                      <td className="px-4 py-3.5 text-[var(--text-muted)] whitespace-nowrap">
-                        <Tooltip content={formatDateAbsolute(item.createdAt)}>
-                          <time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>
-                        </Tooltip>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-
-          {!isLoading && error && (
-            <div className="p-6 text-center">
-              <p className="text-sm text-[oklch(0.60_0.20_25)]" role="alert">{error.message}</p>
-            </div>
-          )}
-
-          {!isLoading && !error && data && data.items.length === 0 && (
-            <div className="p-12 text-center flex flex-col items-center gap-3">
-              <p className="text-[var(--text-muted)] text-sm font-medium">No review requests found</p>
-              <p className="text-[var(--text-muted)] text-xs">
-                {status || search
-                  ? 'Try adjusting your filters'
-                  : 'Review requests will appear here once they are created'}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {data && data.total > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--glass-border)]">
-            <p className="text-xs text-[var(--text-muted)] tabular-nums">
-              Page {page} of {totalPages} &middot; {data.total} total
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => goToPage(page - 1)}
-                disabled={page <= 1}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => goToPage(page + 1)}
-                disabled={page >= totalPages}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
-      </Card>
-    </div>
+      <DataTable
+        caption="Review requests"
+        columns={COLUMNS}
+        rows={data?.items ?? []}
+        rowKey={(item) => item.id}
+        loading={isLoading}
+        skeletonRows={6}
+        error={!isLoading && error ? error.message : undefined}
+        empty={{
+          title: 'No review requests found',
+          description:
+            status || search
+              ? 'Try adjusting your filters.'
+              : 'Review requests appear here once a pull request is opened on a connected repo.',
+        }}
+        toolbar={
+          <>
+            <Select
+              label="Status"
+              options={STATUS_OPTIONS}
+              value={status}
+              onChange={handleStatusChange}
+              containerClassName={styles.statusField}
+            />
+            <Input
+              key={search}
+              label="Search"
+              type="search"
+              placeholder="PR title, author, number…"
+              defaultValue={search}
+              onChange={handleSearchChange}
+              containerClassName={styles.searchField}
+            />
+          </>
+        }
+        footer={
+          data && data.total > 0 ? (
+            <Pagination page={page} totalPages={totalPages} total={data.total} onPageChange={goToPage} />
+          ) : undefined
+        }
+      />
+    </>
   );
 }
