@@ -166,6 +166,10 @@ function AccountsSection(): React.ReactElement {
         <Icon name="building" size={14} />
         {INVITE_DIALOG_COPY.trigger}
       </Button>
+      <a href={data.authorizeUrl} className={buttonClass('secondary', 'sm')}>
+        <Icon name="user" size={14} />
+        Already installed? Sign in
+      </a>
       <a href={data.connectUrl} className={buttonClass('secondary', 'sm')}>
         <Icon name="link" size={14} />
         Connect GitHub account
