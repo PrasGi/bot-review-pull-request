@@ -49,6 +49,28 @@ export const repoUpdateSchema = z.object({
 });
 export type RepoUpdateInput = z.infer<typeof repoUpdateSchema>;
 
+export const MAX_BULK_REPOS = 500;
+
+// Every field is optional: only the ones sent are written to every repo.
+export const repoBulkUpdateSchema = z
+  .object({
+    ids: z
+      .array(z.string().regex(/^[a-f\d]{24}$/i, "invalid id"))
+      .min(1)
+      .max(MAX_BULK_REPOS),
+    enabled: z.boolean().optional(),
+    config: repoConfigSchema.partial().optional(),
+  })
+  .refine(
+    (d) => d.enabled !== undefined || Object.keys(d.config ?? {}).length > 0,
+    { message: "Nothing to update" },
+  )
+  .refine(
+    (d) => ("provider" in (d.config ?? {})) === ("model" in (d.config ?? {})),
+    { message: "provider and model are changed together", path: ["config"] },
+  );
+export type RepoBulkUpdateInput = z.infer<typeof repoBulkUpdateSchema>;
+
 export const settingsUpdateSchema = z.object({
   defaultProvider: z.enum(["anthropic", "openai", "glm", "kimi"]).optional(),
   defaultModel: z.string().min(1).optional(),

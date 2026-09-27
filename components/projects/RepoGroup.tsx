@@ -2,6 +2,7 @@ import * as React from 'react';
 import { cn } from '@/lib/ui/cn';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Icon } from '@/components/ui/Icon';
 import { Switch } from '@/components/ui/Switch';
 
@@ -28,16 +29,41 @@ type RepoRowProps = {
   lastEventAt?: string;
   removed?: boolean;
   onConfigure?: () => void;
+  /** Shown only when `onSelectedChange` is set. */
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
+  /** Short config summary, e.g. "Chill · glm-5.2". */
+  meta?: string;
 };
 
-function RepoRow({ fullName, enabled, onEnabledChange, toggling, lastEventAt, removed, onConfigure }: RepoRowProps): React.ReactElement {
+function RepoRow({
+  fullName,
+  enabled,
+  onEnabledChange,
+  toggling,
+  lastEventAt,
+  removed,
+  onConfigure,
+  selected = false,
+  onSelectedChange,
+  meta,
+}: RepoRowProps): React.ReactElement {
   return (
     <div className={cn('prr-repo-row', removed && 'is-removed')}>
+      {onSelectedChange && (
+        <Checkbox
+          checked={selected}
+          onChange={(e) => onSelectedChange(e.target.checked)}
+          disabled={removed}
+          aria-label={`Select ${fullName}`}
+        />
+      )}
       <Icon name="fork" />
       <div className="prr-repo-name">
         <span>{fullName}</span>
         {removed && <Badge>Removed</Badge>}
       </div>
+      {meta && <span className="prr-repo-time">{meta}</span>}
       {lastEventAt && <time className="prr-repo-time">{lastEventAt}</time>}
       <Switch
         checked={enabled}

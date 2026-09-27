@@ -10,7 +10,21 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { mutateJson, FetchError } from '@/lib/ui/swr';
 import { toast } from '@/components/ui/Toast';
-import { PROFILE_META, REVIEW_PROFILES } from '@/lib/prompts/profile-meta';
+import {
+  MAX_AUTHOR_PROFILES,
+  MAX_CHUNKS,
+  MIN_CHUNKS,
+  PROFILE_OPTIONS,
+  PROVIDER_OPTIONS,
+  isProviderValue,
+  isReviewProfile,
+  splitLines,
+  validateAuthorLogins,
+  validateContextFiles,
+  validateGuidelines,
+  validateIgnorePatterns,
+  validateMaxChunks,
+} from './repo-config-options';
 import styles from './RepoConfigDialog.module.css';
 
 export type AuthorProfileRule = {
@@ -31,7 +45,6 @@ export type RepoConfig = {
 };
 
 type ReviewProfile = RepoConfig['reviewProfile'];
-type ProviderValue = Exclude<RepoConfig['provider'], null>;
 
 type AuthorProfileRow = {
   id: string;
@@ -60,44 +73,10 @@ export type RepoConfigDialogProps = {
   onSaved: () => void;
 };
 
-const PROVIDER_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: 'Default (inherit global)' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'glm', label: 'GLM' },
-  { value: 'kimi', label: 'Kimi' },
-];
-
-const PROFILE_OPTIONS: { value: string; label: string }[] = REVIEW_PROFILES.map((profile) => ({
-  value: profile,
-  label: `${PROFILE_META[profile].label} — ${PROFILE_META[profile].tagline}`,
-}));
-
-const VALID_PROVIDERS: ProviderValue[] = ['anthropic', 'openai', 'glm', 'kimi'];
-const VALID_PROFILES: ReviewProfile[] = ['chill', 'normal', 'professional', 'expert'];
-
-const MAX_AUTHOR_PROFILES = 50;
-// Mirrors authorProfileRuleSchema.login in lib/schemas: GitHub logins are
-// alphanumeric with single non-trailing hyphens, 1–39 chars.
-const GITHUB_LOGIN_RE = /^[A-Za-z\d](?:[A-Za-z\d]|-(?=[A-Za-z\d])){0,38}$/;
-
-// Mirrors repoConfigSchema.maxChunks in lib/schemas and MAX_CHUNKS in
-// lib/review/pipeline: 84 chunks × 12k tokens ≈ the 1M total input budget.
-const MIN_CHUNKS = 1;
-const MAX_CHUNKS = 84;
-
 let authorRowSeq = 0;
 function makeAuthorRow(login = '', profile: ReviewProfile = 'normal'): AuthorProfileRow {
   authorRowSeq += 1;
   return { id: `apr-${authorRowSeq}`, login, profile };
-}
-
-function isProviderValue(v: string): v is ProviderValue {
-  return (VALID_PROVIDERS as string[]).includes(v);
-}
-
-function isReviewProfile(v: string): v is ReviewProfile {
-  return (VALID_PROFILES as string[]).includes(v);
 }
 
 function configToForm(config: RepoConfig): FormState {
@@ -117,46 +96,19 @@ function configToForm(config: RepoConfig): FormState {
 }
 
 function validateForm(form: FormState): string | null {
-  const ignoreLines = form.ignorePatternsText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (ignoreLines.length > 50) return 'Ignore patterns: at most 50 entries allowed';
-  const longIgnore = ignoreLines.find((l) => l.length > 200);
-  if (longIgnore) return `Ignore pattern too long (max 200 chars): "${longIgnore.slice(0, 40)}…"`;
-
-  const contextLines = form.contextFilesText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-  if (contextLines.length > 20) return 'Context files: at most 20 entries allowed';
-  const longContext = contextLines.find((l) => l.length > 300);
-  if (longContext) return `Context file path too long (max 300 chars): "${longContext.slice(0, 40)}…"`;
-
-  const authorRules = form.authorProfiles.filter((r) => r.login.trim() !== '');
-  if (authorRules.length > MAX_AUTHOR_PROFILES)
-    return `Author overrides: at most ${MAX_AUTHOR_PROFILES} entries allowed`;
-  const badLogin = authorRules.find((r) => !GITHUB_LOGIN_RE.test(r.login.trim()));
-  if (badLogin)
-    return `Invalid GitHub username: "${badLogin.login.trim().slice(0, 40)}"`;
-
-  if (form.customGuidelines.length > 2000)
-    return 'Custom guidelines must be at most 2000 characters';
-  if (form.maxChunks < MIN_CHUNKS || form.maxChunks > MAX_CHUNKS)
-    return `Max chunks must be between ${MIN_CHUNKS} and ${MAX_CHUNKS}`;
-
-  return null;
+  const logins = form.authorProfiles.map((r) => r.login.trim()).filter(Boolean);
+  return (
+    validateIgnorePatterns(splitLines(form.ignorePatternsText)) ??
+    validateContextFiles(splitLines(form.contextFilesText)) ??
+    validateAuthorLogins(logins) ??
+    validateGuidelines(form.customGuidelines) ??
+    validateMaxChunks(form.maxChunks)
+  );
 }
 
 function formToConfig(form: FormState): Partial<RepoConfig> {
-  const ignorePatterns = form.ignorePatternsText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const contextFiles = form.contextFilesText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const ignorePatterns = splitLines(form.ignorePatternsText);
+  const contextFiles = splitLines(form.contextFilesText);
 
   const authorProfiles: AuthorProfileRule[] = form.authorProfiles
     .map((r) => ({ login: r.login.trim(), profile: r.profile }))

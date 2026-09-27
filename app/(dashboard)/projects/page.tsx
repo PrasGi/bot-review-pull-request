@@ -21,6 +21,12 @@ import { RepoConfigDialog } from './RepoConfigDialog';
 import { InviteOrgDialog } from './InviteOrgDialog';
 import { INVITES_KEY, OwnerInvites } from './OwnerInvites';
 import { INVITE_DIALOG_COPY } from '@/lib/invites/copy';
+import { BulkConfigDialog } from './BulkConfigDialog';
+import { RepoFilters } from './RepoFilters';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { BULK_COPY, REPO_FILTER_COPY } from '@/lib/repos/copy';
+import { filterOptions, filterRepos, hasActiveFilter, parseRepoFilter } from '@/lib/repos/filter';
+import { PROFILE_META } from '@/lib/prompts/profile-meta';
 import type { RepoConfig } from './RepoConfigDialog';
 import styles from './page.module.css';
 
@@ -274,9 +280,15 @@ type RepoItemProps = {
   repo: Repo;
   onToggle: (id: string, enabled: boolean) => Promise<void>;
   onConfigSaved: () => void;
+  selected: boolean;
+  onSelectedChange: (id: string, selected: boolean) => void;
 };
 
-function RepoItem({ repo, onToggle, onConfigSaved }: RepoItemProps): React.ReactElement {
+function repoMeta(config: RepoConfig): string {
+  return `${PROFILE_META[config.reviewProfile].label} · ${config.model ?? 'default model'}`;
+}
+
+function RepoItem({ repo, onToggle, onConfigSaved, selected, onSelectedChange }: RepoItemProps): React.ReactElement {
   const [toggling, setToggling] = React.useState(false);
   const [configOpen, setConfigOpen] = React.useState(false);
 
@@ -299,6 +311,9 @@ function RepoItem({ repo, onToggle, onConfigSaved }: RepoItemProps): React.React
         removed={repo.removedFromInstallation}
         lastEventAt={repo.lastEventAt ? new Date(repo.lastEventAt).toLocaleDateString() : undefined}
         onConfigure={() => setConfigOpen(true)}
+        selected={selected}
+        onSelectedChange={(checked) => onSelectedChange(repo.id, checked)}
+        meta={repoMeta(repo.config)}
       />
       <RepoConfigDialog
         repoId={repo.id}
@@ -334,7 +349,8 @@ function ReposSection(): React.ReactElement {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const q = searchParams.get('q') ?? '';
+  const filter = React.useMemo(() => parseRepoFilter(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const q = filter.q;
   const rawPage = parseInt(searchParams.get('page') ?? '1', 10);
 
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -387,21 +403,50 @@ function ReposSection(): React.ReactElement {
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  const filteredRepos = React.useMemo<Repo[]>(() => {
-    if (!data) return [];
-    if (!q) return data.repos;
-    const lower = q.toLowerCase();
-    return data.repos.filter((r) => r.fullName.toLowerCase().includes(lower));
-  }, [data, q]);
+  const filteredRepos = React.useMemo<Repo[]>(
+    () => (data ? filterRepos(data.repos, filter) : []),
+    [data, filter]
+  );
+  const options = React.useMemo(() => filterOptions(data?.repos ?? []), [data]);
+
+  function clearFilters(): void {
+    pushParams({ q: '', account: '', status: '', profile: '', model: '' });
+  }
+
+  // Selection survives paging, but only repos that match the filter and can
+  // still be reviewed ever count, so hidden rows are never bulk-edited.
+  const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
+  const [bulkOpen, setBulkOpen] = React.useState(false);
+  const selectableIds = React.useMemo(
+    () => filteredRepos.filter((r) => !r.removedFromInstallation).map((r) => r.id),
+    [filteredRepos]
+  );
+  const selectedIds = React.useMemo(() => selectableIds.filter((id) => selected.has(id)), [selectableIds, selected]);
+
+  const setSelection = (ids: string[], checked: boolean): void => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
 
   const totalFiltered = filteredRepos.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
   const page = Math.min(Math.max(Number.isNaN(rawPage) ? 1 : rawPage, 1), totalPages);
 
+  const pageRepos = React.useMemo(
+    () => filteredRepos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredRepos, page]
+  );
+  const pageSelectableIds = pageRepos.filter((r) => !r.removedFromInstallation).map((r) => r.id);
+  const pageAllSelected = pageSelectableIds.length > 0 && pageSelectableIds.every((id) => selected.has(id));
+
   const grouped = React.useMemo<[string, Repo[]][]>(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    const end = Math.min(start + PAGE_SIZE, filteredRepos.length);
-    const slice = filteredRepos.slice(start, end);
+    const slice = pageRepos;
     const map = new Map<string, Repo[]>();
     for (const repo of slice) {
       const list = map.get(repo.accountLogin) ?? [];
@@ -409,7 +454,7 @@ function ReposSection(): React.ReactElement {
       map.set(repo.accountLogin, list);
     }
     return Array.from(map.entries());
-  }, [filteredRepos, page]);
+  }, [pageRepos]);
 
   return (
     <section aria-labelledby="repos-heading">
@@ -452,10 +497,73 @@ function ReposSection(): React.ReactElement {
         </Card>
       )}
 
+      {data && data.repos.length > 0 && (
+        <RepoFilters
+          filter={filter}
+          options={options}
+          onChange={(updates) => pushParams(updates)}
+          onClear={clearFilters}
+          canClear={hasActiveFilter(filter)}
+        />
+      )}
+
       {data && data.repos.length > 0 && filteredRepos.length === 0 && (
         <Card>
-          <EmptyState title="No repositories match" description="Try a different search term." />
+          <EmptyState
+            title={REPO_FILTER_COPY.noMatch}
+            description={REPO_FILTER_COPY.noMatchHint}
+            action={
+              hasActiveFilter(filter) ? (
+                <Button variant="secondary" size="sm" onClick={clearFilters}>
+                  {REPO_FILTER_COPY.clear}
+                </Button>
+              ) : undefined
+            }
+          />
         </Card>
+      )}
+
+      {data && filteredRepos.length > 0 && (
+        <div className={styles.selectionBar} role="region" aria-label="Selection">
+          <Checkbox
+            checked={pageAllSelected}
+            onChange={(e) => setSelection(pageSelectableIds, e.target.checked)}
+            disabled={pageSelectableIds.length === 0}
+            label={BULK_COPY.selectPage}
+          />
+          {selectedIds.length > 0 && (
+            <>
+              <span className={styles.selectionCount} aria-live="polite">
+                {BULK_COPY.selected(selectedIds.length)}
+              </span>
+              <div className={styles.selectionActions}>
+                {selectedIds.length < selectableIds.length && (
+                  <Button variant="ghost" size="sm" onClick={() => setSelection(selectableIds, true)}>
+                    {BULK_COPY.selectAll(selectableIds.length)}
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+                  {BULK_COPY.clear}
+                </Button>
+                <Button size="sm" onClick={() => setBulkOpen(true)}>
+                  <Icon name="settings" size={14} />
+                  {BULK_COPY.open}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {bulkOpen && (
+        <BulkConfigDialog
+          ids={selectedIds}
+          onClose={() => setBulkOpen(false)}
+          onApplied={() => {
+            setSelected(new Set());
+            void mutate();
+          }}
+        />
       )}
 
       {data && filteredRepos.length > 0 && (
@@ -463,7 +571,14 @@ function ReposSection(): React.ReactElement {
           {grouped.map(([accountLogin, repos]) => (
             <RepoGroup key={accountLogin} title={accountLogin} count={repos.length}>
               {repos.map((repo) => (
-                <RepoItem key={repo.id} repo={repo} onToggle={handleToggle} onConfigSaved={handleConfigSaved} />
+                <RepoItem
+                  key={repo.id}
+                  repo={repo}
+                  onToggle={handleToggle}
+                  onConfigSaved={handleConfigSaved}
+                  selected={selected.has(repo.id)}
+                  onSelectedChange={(id, checked) => setSelection([id], checked)}
+                />
               ))}
             </RepoGroup>
           ))}

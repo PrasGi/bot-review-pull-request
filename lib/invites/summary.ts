@@ -6,6 +6,7 @@ import type {
   SettingsDoc,
   UserConnectionDoc,
 } from "@/lib/db/types";
+import { PROVIDER_LABEL } from "@/lib/ai/provider-labels";
 import { PROFILE_KNOBS } from "@/lib/prompts/defaults";
 import { PROFILE_META } from "@/lib/prompts/profile-meta";
 
@@ -41,13 +42,6 @@ export interface ConnectionSummary {
   rows: ConnectedRepoRow[];
   activeCount: number;
 }
-
-export const PROVIDER_LABEL: Record<AIProviderName, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  glm: "GLM",
-  kimi: "Kimi",
-};
 
 /** "Up to 5 findings, major and above." */
 export function profileLimits(profile: ReviewProfile): string {

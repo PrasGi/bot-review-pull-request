@@ -1,0 +1,47 @@
+/* Doubled class: outranks the kit's .prr-dialog width without !important. */
+.dialog.dialog {
+  max-width: 600px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--border-thin) solid var(--border);
+}
+
+.field[data-active] {
+  background: var(--bg);
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pair {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .pair {
+    flex-direction: column;
+  }
+}

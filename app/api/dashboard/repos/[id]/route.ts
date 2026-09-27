@@ -4,6 +4,7 @@ import { guard } from "@/lib/auth/guard";
 import { reposCollection } from "@/lib/db/collections";
 import { repoUpdateSchema } from "@/lib/schemas";
 import type { RepoDoc } from "@/lib/db/types";
+import { buildRepoSet } from "@/lib/repos/update";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,13 +40,7 @@ export async function PATCH(
     );
   }
 
-  const set: Record<string, unknown> = { updatedAt: new Date() };
-  if (parsed.data.enabled !== undefined) set.enabled = parsed.data.enabled;
-  if (parsed.data.config) {
-    for (const [key, value] of Object.entries(parsed.data.config)) {
-      set[`config.${key}`] = value;
-    }
-  }
+  const set = buildRepoSet(parsed.data);
 
   const repos = await reposCollection();
   const update = { $set: set } as UpdateFilter<RepoDoc>;
