@@ -41,3 +41,9 @@
 .search {
   width: min(288px, 100%);
 }
+
+.headingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

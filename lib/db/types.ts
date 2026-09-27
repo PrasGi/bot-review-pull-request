@@ -73,6 +73,24 @@ export interface UserConnectionDoc {
   updatedAt: Date;
 }
 
+export interface OrgInviteDoc {
+  _id: ObjectId;
+  /** sha256 of the invite token; the raw token is never stored. */
+  tokenHash: string;
+  /** Org or user login the owner is expected to install on (display only). */
+  targetLogin: string;
+  /** Lower-cased targetLogin, for matching webhook accounts. */
+  targetLoginKey: string;
+  /** The bot account that reviews PRs once the installation is linked. */
+  reviewerConnectionId: ObjectId;
+  createdAt: Date;
+  expiresAt: Date;
+  revokedAt?: Date;
+  completedAt?: Date;
+  installationId?: number;
+  accountLogin?: string;
+}
+
 export interface AuthorProfileRule {
   login: string;
   profile: ReviewProfile;

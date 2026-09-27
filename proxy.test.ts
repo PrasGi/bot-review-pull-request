@@ -20,6 +20,13 @@ describe("proxy", () => {
     expect(res.headers.get("location")).toBe("https://bot-review.example/");
   });
 
+  it("leaves the public owner-invite pages open to visitors without a session", () => {
+    for (const path of ["/invite/abc", "/invite/abc/connected", "/api/invite/abc/start"]) {
+      const res = proxy(request(path));
+      expect(res.headers.get("location")).toBeNull();
+    }
+  });
+
   it("clears a stale session on /login?expired=1 instead of redirecting (no loop)", () => {
     const res = proxy(request("/login?expired=1", "stale"));
     expect(res.headers.get("location")).toBeNull();

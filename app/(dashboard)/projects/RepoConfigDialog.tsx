@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { mutateJson, FetchError } from '@/lib/ui/swr';
 import { toast } from '@/components/ui/Toast';
+import { PROFILE_META, REVIEW_PROFILES } from '@/lib/prompts/profile-meta';
 import styles from './RepoConfigDialog.module.css';
 
 export type AuthorProfileRule = {
@@ -67,12 +68,10 @@ const PROVIDER_OPTIONS: { value: string; label: string }[] = [
   { value: 'kimi', label: 'Kimi' },
 ];
 
-const PROFILE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'chill', label: 'Chill — light-touch suggestions' },
-  { value: 'normal', label: 'Normal — balanced feedback' },
-  { value: 'professional', label: 'Professional — thorough review' },
-  { value: 'expert', label: 'Expert — exhaustive analysis' },
-];
+const PROFILE_OPTIONS: { value: string; label: string }[] = REVIEW_PROFILES.map((profile) => ({
+  value: profile,
+  label: `${PROFILE_META[profile].label} — ${PROFILE_META[profile].tagline}`,
+}));
 
 const VALID_PROVIDERS: ProviderValue[] = ['anthropic', 'openai', 'glm', 'kimi'];
 const VALID_PROFILES: ReviewProfile[] = ['chill', 'normal', 'professional', 'expert'];

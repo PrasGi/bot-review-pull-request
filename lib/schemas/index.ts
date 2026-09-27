@@ -24,6 +24,12 @@ export const authorProfileRuleSchema = z.object({
 });
 export type AuthorProfileRuleInput = z.infer<typeof authorProfileRuleSchema>;
 
+export const inviteCreateSchema = z.object({
+  targetLogin: authorProfileRuleSchema.shape.login,
+  reviewerConnectionId: z.string().regex(/^[a-f\d]{24}$/i, "invalid id"),
+});
+export type InviteCreateInput = z.infer<typeof inviteCreateSchema>;
+
 export const repoConfigSchema = z.object({
   provider: z.enum(["anthropic", "openai", "glm", "kimi"]).nullable(),
   model: z.string().nullable(),

@@ -8,6 +8,17 @@ const nextConfig: NextConfig = {
   // pnpm-workspace.yaml makes Next.js infer a monorepo root; pinning the
   // tracing root keeps it at this directory.
   outputFileTracingRoot: path.join(__dirname),
+
+  // Invite URLs carry a bearer token; never leak it to GitHub via Referer.
+  async headers() {
+    return ["/invite/:path*", "/api/invite/:path*"].map((source) => ({
+      source,
+      headers: [
+        { key: "Referrer-Policy", value: "no-referrer" },
+        { key: "X-Robots-Tag", value: "noindex, nofollow" },
+      ],
+    }));
+  },
 };
 
 export default nextConfig;

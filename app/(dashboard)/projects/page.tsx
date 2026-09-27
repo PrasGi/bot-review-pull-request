@@ -5,7 +5,7 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR, { mutate as globalMutate } from 'swr';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { buttonClass } from '@/components/ui/Button';
+import { Button, buttonClass } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { toast } from '@/components/ui/Toast';
@@ -18,6 +18,9 @@ import { AccountCard } from '@/components/projects/AccountCard';
 import { RepoGroup, RepoRow } from '@/components/projects/RepoGroup';
 import { fetcher, mutateJson, FetchError } from '@/lib/ui/swr';
 import { RepoConfigDialog } from './RepoConfigDialog';
+import { InviteOrgDialog } from './InviteOrgDialog';
+import { INVITES_KEY, OwnerInvites } from './OwnerInvites';
+import { INVITE_DIALOG_COPY } from '@/lib/invites/copy';
 import type { RepoConfig } from './RepoConfigDialog';
 import styles from './page.module.css';
 
@@ -50,6 +53,7 @@ type AccountsResponse = {
   accounts: Account[];
   pendingInstallations: PendingInstallation[];
   connectUrl: string;
+  authorizeUrl: string;
 };
 
 type Repo = {
@@ -154,16 +158,24 @@ function AccountsSection(): React.ReactElement {
     }
   }, [connectStatus]);
 
-  const connectLink = data?.connectUrl ? (
-    <a href={data.connectUrl} className={buttonClass('secondary', 'sm')}>
-      <Icon name="link" size={14} />
-      Connect GitHub account
-    </a>
+  const [inviteOpen, setInviteOpen] = React.useState(false);
+
+  const headingActions = data?.connectUrl ? (
+    <div className={styles.headingActions}>
+      <Button variant="secondary" size="sm" onClick={() => setInviteOpen(true)}>
+        <Icon name="building" size={14} />
+        {INVITE_DIALOG_COPY.trigger}
+      </Button>
+      <a href={data.connectUrl} className={buttonClass('secondary', 'sm')}>
+        <Icon name="link" size={14} />
+        Connect GitHub account
+      </a>
+    </div>
   ) : null;
 
   return (
     <section aria-labelledby="accounts-heading">
-      <SectionHeading action={data && data.accounts.length > 0 ? connectLink : null}>
+      <SectionHeading action={data && data.accounts.length > 0 ? headingActions : null}>
         <span id="accounts-heading">Connected accounts</span>
       </SectionHeading>
 
@@ -182,12 +194,22 @@ function AccountsSection(): React.ReactElement {
           <EmptyState
             icon="folder"
             title="No accounts connected yet"
-            description="Connect a GitHub account to start reviewing pull requests."
+            description="Connect a GitHub account to start reviewing pull requests. If the app is already installed on it, sign in instead."
             action={
-              <a href={data.connectUrl} className={buttonClass('primary')}>
-                <Icon name="plus" />
-                Connect GitHub account
-              </a>
+              <div className={styles.headingActions}>
+                <a href={data.connectUrl} className={buttonClass('primary')}>
+                  <Icon name="plus" />
+                  Connect GitHub account
+                </a>
+                <a href={data.authorizeUrl} className={buttonClass('secondary')}>
+                  <Icon name="user" />
+                  Already installed? Sign in
+                </a>
+                <Button variant="secondary" onClick={() => setInviteOpen(true)}>
+                  <Icon name="building" />
+                  {INVITE_DIALOG_COPY.trigger}
+                </Button>
+              </div>
             }
           />
         </Card>
@@ -227,6 +249,18 @@ function AccountsSection(): React.ReactElement {
             ))}
           </Grid>
         </div>
+      )}
+
+      {data && data.accounts.length > 0 && <OwnerInvites />}
+
+      {inviteOpen && data && (
+        <InviteOrgDialog
+          open
+          onOpenChange={setInviteOpen}
+          reviewers={data.accounts.map((a) => ({ id: a.id, githubLogin: a.githubLogin }))}
+          connectUrl={data.connectUrl}
+          onCreated={() => void globalMutate(INVITES_KEY)}
+        />
       )}
     </section>
   );

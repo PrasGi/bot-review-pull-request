@@ -175,6 +175,38 @@ are synced from the `installation.created` webhook — no dashboard action is ne
 The requesting user's own connection (identity + token) is captured when they run the
 connect flow themselves.
 
+### Invite an org owner (recommended for orgs)
+
+When you are not an owner, send the owner an invite link instead of waiting on a
+request. It also re-imports an installation that already exists on GitHub (for
+example after switching to a new database), which webhooks alone cannot do.
+
+1. **Projects → Invite org owner.** Enter the org login and pick the reviewer
+   account. You get `${APP_URL}/invite/<token>`: single use, valid for 7 days,
+   shown once (only its sha256 is stored in `org_invites`). Open invites can be
+   revoked from the same page.
+2. **The owner opens the link.** `/invite/<token>` is public and `noindex`. It
+   explains what the bot does, its permissions, what is stored, how to remove it
+   and who operates it. "Continue to GitHub" goes through
+   `/api/invite/<token>/start` to `installations/new?state=inv.<token>`.
+3. **The owner selects repos on GitHub.** GitHub returns to `/api/github/callback`
+   with `state=inv.<token>`, `code`, `installation_id` and `setup_action`. The
+   callback (`lib/invites/complete.ts`):
+   - exchanges `code` for the owner's token, checks `installation_id` is one of
+     the owner's installations, and syncs the installation and its **full** repo
+     list;
+   - revokes the owner's token (it is never stored), marks the invite used, and
+     re-syncs the reviewer account so its `installationIds` include the org.
+4. **`/invite/<token>/connected`** confirms it: every repo with its status
+   (active, or why not), model (repo override or global default) and review
+   character, plus how to request a review.
+
+If GitHub does not redirect after the owner edits an existing installation, the
+`installation` / `installation_repositories` webhook completes any open invite for
+that org login instead, and the confirmation page refreshes until it does.
+`setup_action=request` (the link was opened by a non-owner) shows "Approval
+pending" and keeps the invite open.
+
 ---
 
 ## 10. Usage rollup cron

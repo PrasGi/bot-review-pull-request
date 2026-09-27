@@ -6,6 +6,12 @@ import { exchangeCodeForTokens } from "@/lib/github/oauth";
 import { connectUser } from "@/lib/github/sync";
 import { OAUTH_STATE_COOKIE } from "@/app/api/github/connect/route";
 import { SESSION_COOKIE } from "@/lib/auth/session";
+import {
+  completeInviteFromCallback,
+  type InviteCallbackOutcome,
+} from "@/lib/invites/complete";
+import { parseInviteState } from "@/lib/invites/token";
+import { connectedPath, invitePath } from "@/lib/invites/urls";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,10 +30,37 @@ function redirectToConnected(status: string): NextResponse {
   return NextResponse.redirect(url);
 }
 
+async function handleInviteCallback(
+  token: string,
+  params: URLSearchParams,
+): Promise<NextResponse> {
+  const outcome = await completeInviteFromCallback({
+    token,
+    code: params.get("code"),
+    installationId: params.get("installation_id"),
+    setupAction: params.get("setup_action"),
+  });
+  const path: Record<InviteCallbackOutcome, string> = {
+    connected: connectedPath(token),
+    pending: connectedPath(token, "pending"),
+    error: connectedPath(token, "error"),
+    // The invite page says whether it is revoked, expired or unknown.
+    invalid: invitePath(token),
+  };
+  return NextResponse.redirect(new URL(path[outcome], getEnv().APP_URL));
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const params = request.nextUrl.searchParams;
   const code = params.get("code");
   const state = params.get("state");
+
+  // An org owner coming back from an invite link. They have no session and no
+  // CSRF cookie; the single-use invite token in `state` is the credential.
+  const inviteToken = parseInviteState(state);
+  if (inviteToken) {
+    return handleInviteCallback(inviteToken, params);
+  }
 
   const cookieStore = await cookies();
   const expectedState = cookieStore.get(OAUTH_STATE_COOKIE)?.value;

@@ -72,6 +72,17 @@ export function buildInstallUrl(state: string): string {
   return url.toString();
 }
 
+// For an app that is already installed: GitHub shows the installation settings
+// instead of redirecting, so only user authorization returns a code.
+export function buildAuthorizeUrl(state: string): string {
+  const env = getEnv();
+  const url = new URL("https://github.com/login/oauth/authorize");
+  url.searchParams.set("client_id", env.GITHUB_CLIENT_ID);
+  url.searchParams.set("redirect_uri", `${env.APP_URL}/api/github/callback`);
+  url.searchParams.set("state", state);
+  return url.toString();
+}
+
 export async function exchangeCodeForTokens(
   code: string,
 ): Promise<GitHubTokenSet> {
@@ -88,4 +99,32 @@ export async function refreshTokens(
     refresh_token: refreshToken,
     grant_type: "refresh_token",
   });
+}
+
+/**
+ * Revokes a user token issued to this app (DELETE /applications/{client_id}/token).
+ * Used for tokens we only needed once, such as an org owner's during an invite.
+ */
+export async function revokeUserToken(accessToken: string): Promise<void> {
+  const env = getEnv();
+  const basic = Buffer.from(
+    `${env.GITHUB_CLIENT_ID}:${env.GITHUB_CLIENT_SECRET}`,
+  ).toString("base64");
+  const res = await fetch(
+    `https://api.github.com/applications/${env.GITHUB_CLIENT_ID}/token`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ access_token: accessToken }),
+    },
+  );
+  // 204 = revoked; 404 = already gone. Anything else is worth a log line.
+  if (res.status !== 204 && res.status !== 404) {
+    throw new Error(`GitHub token revoke returned ${res.status}`);
+  }
 }

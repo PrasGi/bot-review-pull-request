@@ -12,6 +12,7 @@ import type {
   ProcessedWebhookDoc,
   SettingsDoc,
   SessionDoc,
+  OrgInviteDoc,
 } from "@/lib/db/types";
 
 export const COLLECTIONS = {
@@ -26,6 +27,7 @@ export const COLLECTIONS = {
   processedWebhooks: "processed_webhooks",
   settings: "settings",
   sessions: "sessions",
+  orgInvites: "org_invites",
 } as const;
 
 export async function installationsCollection(): Promise<
@@ -90,4 +92,10 @@ export async function settingsCollection(): Promise<Collection<SettingsDoc>> {
 
 export async function sessionsCollection(): Promise<Collection<SessionDoc>> {
   return (await getDb()).collection<SessionDoc>(COLLECTIONS.sessions);
+}
+
+export async function orgInvitesCollection(): Promise<
+  Collection<OrgInviteDoc>
+> {
+  return (await getDb()).collection<OrgInviteDoc>(COLLECTIONS.orgInvites);
 }

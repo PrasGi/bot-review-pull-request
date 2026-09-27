@@ -133,6 +133,7 @@ If files were left out (token budget), time ran out, or a chunk failed, the verd
 ### Multi-account and org friendly
 - **Several accounts:** you can connect several GitHub accounts.
 - **Org repos:** if you are only a member, the install becomes a pending request, and it syncs automatically once an owner approves it.
+- **Owner invites:** Projects → "Invite org owner" makes a single-use, 7-day link. The owner gets a public page explaining the bot, installs on GitHub, and lands on a confirmation listing each repo's status, model and review character. See [`docs/setup.md`](./docs/setup.md#invite-an-org-owner-recommended-for-orgs).
 - **Health warnings:** the dashboard flags accounts that need reconnecting, tokens expiring within 14 days, repos with no webhook events for 7 days, and failures in the last 24 hours.
 
 ### A dashboard you can actually read

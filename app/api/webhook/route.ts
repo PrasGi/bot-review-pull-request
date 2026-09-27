@@ -11,6 +11,8 @@ import { evaluatePullRequestEvent } from "@/lib/webhook/trigger-matrix";
 import { reapStuckRequests } from "@/lib/review/reaper";
 import { runReviewRequest } from "@/lib/review/runner";
 import { handleRequestFailure } from "@/lib/review/failure";
+import { completeOpenInvitesForAccount } from "@/lib/invites/complete";
+import { errorFields, log } from "@/lib/logger";
 import type {
   InstallationEvent,
   InstallationRepositoriesEvent,
@@ -25,6 +27,21 @@ export const maxDuration = 300;
 function clientIp(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() ?? "unknown";
+}
+
+// Fallback for owners who edit an existing installation: GitHub may not
+// redirect them back, but it always sends the webhook. The reviewer resync
+// makes GitHub calls, so it never holds the webhook response.
+function completeInvitesLater(installation: InstallationEvent["installation"]): void {
+  const accountLogin = installation.account?.login;
+  if (!accountLogin) return;
+  after(async () => {
+    await completeOpenInvitesForAccount(accountLogin, installation.id).catch(
+      (error: unknown) => {
+        log.error("[invite] webhook completion failed", errorFields(error));
+      },
+    );
+  });
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -68,13 +85,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   if (event === "installation") {
-    await handleInstallationEvent(payload as InstallationEvent);
+    const installationEvent = payload as InstallationEvent;
+    await handleInstallationEvent(installationEvent);
+    if (
+      installationEvent.action !== "deleted" &&
+      installationEvent.action !== "suspend"
+    ) {
+      completeInvitesLater(installationEvent.installation);
+    }
     return NextResponse.json({ status: "synced" });
   }
   if (event === "installation_repositories") {
-    await handleInstallationRepositoriesEvent(
-      payload as InstallationRepositoriesEvent,
-    );
+    const reposEvent = payload as InstallationRepositoriesEvent;
+    await handleInstallationRepositoriesEvent(reposEvent);
+    completeInvitesLater(reposEvent.installation);
     return NextResponse.json({ status: "synced" });
   }
   if (event === "installation_request") {

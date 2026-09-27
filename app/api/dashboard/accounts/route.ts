@@ -57,5 +57,6 @@ export const GET = withGuard(async () => {
     accounts: items,
     pendingInstallations,
     connectUrl: `${getEnv().APP_URL}/api/github/connect`,
+    authorizeUrl: `${getEnv().APP_URL}/api/github/connect?mode=authorize`,
   });
 });

@@ -1,3 +1,4 @@
+import { ensureInviteIndexes } from "@/lib/invites/indexes";
 import {
   installationsCollection,
   pendingInstallationsCollection,
@@ -95,4 +96,6 @@ export async function ensureIndexes(): Promise<void> {
   await sessions.createIndexes([
     { key: { expiresAt: 1 }, expireAfterSeconds: 0, name: "ttl_session" },
   ]);
+
+  await ensureInviteIndexes();
 }

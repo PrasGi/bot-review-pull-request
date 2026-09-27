@@ -1,15 +1,17 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getEnv, requireGithubEnv } from "@/lib/env";
-import { buildInstallUrl } from "@/lib/github/oauth";
+import { buildAuthorizeUrl, buildInstallUrl } from "@/lib/github/oauth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const OAUTH_STATE_COOKIE = "gh_oauth_state";
 
-export async function GET(): Promise<NextResponse> {
+// `?mode=authorize` signs in an account whose installation already exists
+// (e.g. after moving to a new database); the default installs the app.
+export async function GET(request: NextRequest): Promise<NextResponse> {
   requireGithubEnv();
   const state = randomBytes(32).toString("hex");
   const cookieStore = await cookies();
@@ -20,5 +22,8 @@ export async function GET(): Promise<NextResponse> {
     path: "/",
     maxAge: 600,
   });
-  return NextResponse.redirect(buildInstallUrl(state));
+  const authorize = request.nextUrl.searchParams.get("mode") === "authorize";
+  return NextResponse.redirect(
+    authorize ? buildAuthorizeUrl(state) : buildInstallUrl(state),
+  );
 }
