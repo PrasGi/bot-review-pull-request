@@ -18,6 +18,16 @@ import styles from './live.module.css';
 const POLL_MS = 2_000;
 const INLINE_FILES = 3;
 
+/**
+ * Stops polling once the run is over. Defined at module level on purpose: the
+ * page re-renders every second for its timers, and SWR restarts its refresh
+ * timer whenever this function's identity changes, so an inline arrow would
+ * never let a refresh fire.
+ */
+function pollInterval(latest: PublicLive | undefined): number {
+  return latest && !isActiveStatus(latest.status) ? 0 : POLL_MS;
+}
+
 function FileList({ files }: { files: string[] }): React.ReactElement {
   return (
     <ul className={styles.files}>
@@ -66,8 +76,7 @@ function LiveSkeleton(): React.ReactElement {
 export function LiveStatus({ token }: { token: string }): React.ReactElement {
   const now = useNow();
   const { data, error } = useSWR<PublicLive, FetchError>(`/api/live/${encodeURIComponent(token)}`, fetcher, {
-    // Stop polling once the run is over; the result does not change after that.
-    refreshInterval: (latest) => (latest && !isActiveStatus(latest.status) ? 0 : POLL_MS),
+    refreshInterval: pollInterval,
     shouldRetryOnError: (err) => !(err instanceof FetchError && [404, 410, 422].includes(err.status)),
   });
 
