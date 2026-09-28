@@ -160,7 +160,7 @@ export async function postIssueComment(
   repo: string,
   prNumber: number,
   body: string,
-): Promise<void> {
+): Promise<{ id: number }> {
   const result = await ghRequest<{ id: number }>(
     `/repos/${owner}/${repo}/issues/${prNumber}/comments`,
     token,
@@ -168,5 +168,23 @@ export async function postIssueComment(
   );
   if (!result.ok) {
     throw new Error(`post issue comment failed: ${result.status}`);
+  }
+  return { id: result.data.id };
+}
+
+/** Deletes a PR conversation comment. A comment that is already gone counts as deleted. */
+export async function deleteIssueComment(
+  token: string,
+  owner: string,
+  repo: string,
+  commentId: number,
+): Promise<void> {
+  const result = await ghRequest<undefined>(
+    `/repos/${owner}/${repo}/issues/comments/${commentId}`,
+    token,
+    { method: "DELETE" },
+  );
+  if (!result.ok && result.status !== 404) {
+    throw new Error(`delete issue comment failed: ${result.status}`);
   }
 }

@@ -7,6 +7,7 @@ import {
 import type { ReviewRequestDoc } from "@/lib/db/types";
 import { createRetryRequest } from "@/lib/dashboard/retry";
 import { postIssueComment } from "@/lib/github/pr";
+import { deleteStatusComment } from "@/lib/review/status-comment";
 import { getValidAccessToken } from "@/lib/github/tokens";
 import { buildFailureComment } from "@/lib/review/summary";
 import { log, errorFields } from "@/lib/logger";
@@ -19,6 +20,7 @@ export interface FailureDeps {
   /** Runs a queued request to completion (the runner). */
   run: (requestId: ObjectId) => Promise<void>;
   postComment: (request: ReviewRequestDoc, body: string) => Promise<void>;
+  deleteStatus: (requestId: ObjectId) => Promise<void>;
 }
 
 async function postFailureComment(request: ReviewRequestDoc, body: string): Promise<void> {
@@ -39,6 +41,7 @@ const defaultDeps: FailureDeps = {
     await runReviewRequest(requestId);
   },
   postComment: postFailureComment,
+  deleteStatus: deleteStatusComment,
 };
 
 export type FailureOutcome =
@@ -66,6 +69,8 @@ export async function handleRequestFailure(
     const requests = await reviewRequestsCollection();
     const request = await requests.findOne({ _id: requestId });
     if (!request) return "not_found";
+    // A run reaped after its process died still has its status comment up.
+    await deps.deleteStatus(requestId);
 
     // A failure after the review was submitted (e.g. while persisting it) must not
     // produce a second review or a contradicting comment.

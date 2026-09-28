@@ -169,6 +169,8 @@ export interface ReviewProgressChunks {
   lastFinishedAt?: Date;
   /** Start time of each running chunk, keyed by chunk index; removed when it finishes. */
   startedAt?: Record<string, Date>;
+  /** How each finished chunk ended, keyed by chunk index. */
+  finished?: Record<string, "done" | "failed">;
 }
 
 /** Live progress written by the pipeline while a request is processing. */
@@ -181,6 +183,10 @@ export interface ReviewProgress {
   chunks?: ReviewProgressChunks;
   findings?: number;
   verdict?: Verdict;
+  model?: { provider: AIProviderName; model: string };
+  profile?: ReviewProfile;
+  /** File names in each chunk, in chunk order. */
+  chunkFiles?: string[][];
 }
 
 export interface ReviewRequestError {
@@ -214,6 +220,10 @@ export interface ReviewRequestDoc {
   stats?: ReviewRequestStats;
   timings?: ReviewRequestTimings;
   progress?: ReviewProgress;
+  /** sha256 of the public live-progress link token. */
+  liveTokenHash?: string;
+  /** The "reviewing, follow the progress here" PR comment; deleted when the run ends. */
+  statusComment?: { id: number; postedAt: Date; deletedAt?: Date };
   heartbeatAt?: Date;
   createdAt: Date;
   startedAt?: Date;

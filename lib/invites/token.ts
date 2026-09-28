@@ -1,19 +1,11 @@
-import { createHash, randomBytes } from "node:crypto";
-import { z } from "zod";
+import { createUrlToken, hashUrlToken, urlTokenSchema } from "@/lib/util/token";
 
 /** Prefix on the GitHub `state` param that marks an owner-invite round trip. */
 export const INVITE_STATE_PREFIX = "inv.";
 
-// 32 random bytes in base64url is always 43 characters.
-export const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
-
-export function createInviteToken(): string {
-  return randomBytes(32).toString("base64url");
-}
-
-export function hashInviteToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
+export const inviteTokenSchema = urlTokenSchema;
+export const createInviteToken = createUrlToken;
+export const hashInviteToken = hashUrlToken;
 
 export function inviteState(token: string): string {
   return `${INVITE_STATE_PREFIX}${token}`;

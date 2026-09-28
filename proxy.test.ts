@@ -21,7 +21,7 @@ describe("proxy", () => {
   });
 
   it("leaves the public owner-invite pages open to visitors without a session", () => {
-    for (const path of ["/invite/abc", "/invite/abc/connected", "/api/invite/abc/start"]) {
+    for (const path of ["/invite/abc", "/invite/abc/connected", "/api/invite/abc/start", "/live/abc", "/api/live/abc"]) {
       const res = proxy(request(path));
       expect(res.headers.get("location")).toBeNull();
     }

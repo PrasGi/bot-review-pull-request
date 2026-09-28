@@ -381,7 +381,11 @@ export async function runReviewPipeline(
   if (kept.length === 0) {
     if (delta.kind === "re_review") {
       if (delta.previousReview) {
-        await progress.stage("evaluating_replies", { path: "reply" });
+        await progress.stage("evaluating_replies", {
+          path: "reply",
+          model: { provider, model },
+          profile: resolveReviewProfile(repo.config, pr.authorLogin),
+        });
         const replyOutcome = await runReplyReview({
           prev: delta.previousReview,
           token,
@@ -483,6 +487,9 @@ export async function runReviewPipeline(
 
   await progress.stage("building_prompts", {
     path: "full",
+    model: { provider, model },
+    profile: resolveReviewProfile(repo.config, pr.authorLogin),
+    chunkFiles: chunks.map((chunk) => chunk.files.map((file) => file.filename)),
     chunks: {
       total: chunks.length,
       done: 0,

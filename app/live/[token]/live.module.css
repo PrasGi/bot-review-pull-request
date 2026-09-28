@@ -1,0 +1,93 @@
+.page {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+.column {
+  width: 100%;
+  max-width: 880px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hero p {
+  margin: 0;
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.section h2 {
+  margin: 0;
+}
+
+.chunks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.chunk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: var(--border-thin) solid var(--border);
+}
+
+.chunk[data-state="running"] {
+  box-shadow: var(--shadow-sm);
+}
+
+.chunk[data-state="waiting"] {
+  opacity: 0.7;
+}
+
+.chunkHead {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font: 700 12px/16px var(--font-mono);
+}
+
+.chunkState {
+  color: var(--text-muted);
+}
+
+.chunk[data-state="running"] .chunkState,
+.chunk[data-state="failed"] .chunkState {
+  color: var(--text);
+}
+
+.files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

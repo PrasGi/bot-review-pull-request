@@ -61,7 +61,11 @@ export function createProgressReporter(requestId: ObjectId): ProgressReporter {
       const now = new Date();
       return write({
         $inc: { "progress.chunks.running": -1, [ok ? "progress.chunks.done" : "progress.chunks.failed"]: 1 },
-        $set: { "progress.chunks.lastFinishedAt": now, "progress.updatedAt": now },
+        $set: {
+          [`progress.chunks.finished.${index}`]: ok ? "done" : "failed",
+          "progress.chunks.lastFinishedAt": now,
+          "progress.updatedAt": now,
+        },
         $unset: { [`progress.chunks.startedAt.${index}`]: "" },
       });
     },

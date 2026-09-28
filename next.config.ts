@@ -9,9 +9,9 @@ const nextConfig: NextConfig = {
   // tracing root keeps it at this directory.
   outputFileTracingRoot: path.join(__dirname),
 
-  // Invite URLs carry a bearer token; never leak it to GitHub via Referer.
+  // Invite and live URLs carry a bearer token; never leak it via Referer.
   async headers() {
-    return ["/invite/:path*", "/api/invite/:path*"].map((source) => ({
+    return ["/invite/:path*", "/api/invite/:path*", "/live/:path*", "/api/live/:path*"].map((source) => ({
       source,
       headers: [
         { key: "Referrer-Policy", value: "no-referrer" },

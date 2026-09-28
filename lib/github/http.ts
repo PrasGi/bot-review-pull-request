@@ -23,5 +23,7 @@ export async function ghRequest<T>(
   if (!res.ok) {
     return { ok: false, status: res.status, body: await res.text() };
   }
+  // DELETE and some PUTs answer 204 with no body.
+  if (res.status === 204) return { ok: true, data: undefined as T };
   return { ok: true, data: (await res.json()) as T };
 }

@@ -69,3 +69,28 @@ export const LIVE_COPY = {
   openRequest: "Open request →",
   loadFailed: "Could not load the live review",
 } as const;
+
+export const PUBLIC_LIVE_COPY = {
+  metaTitle: "Live review · PR Reviewer",
+  kicker: "Live review",
+  failed: "The review could not be completed.",
+  chunksHeading: "Chunks",
+  chunkName: (n: number) => `Chunk ${n}`,
+  chunkState: { waiting: "○ Waiting", running: "● Reviewing", done: "✓ Done", failed: "✕ Failed" },
+  filesCount: (n: number) => `${n} ${n === 1 ? "file" : "files"}`,
+  modelLabel: "Model",
+  characterLabel: "Character",
+  viewOnGitHub: "View the review on GitHub →",
+  openPr: "Open the pull request →",
+  notFound: {
+    badge: "✕ Not found",
+    title: "This link is not valid",
+    body: "Check that the whole link was copied from the pull request comment.",
+  },
+  expired: {
+    badge: "! Expired",
+    title: "This link has expired",
+    body: "Live links work for 24 hours after the review finishes. The review is on the pull request.",
+  },
+  loadFailed: "Could not load the progress. Retrying…",
+} as const;

@@ -3,6 +3,7 @@ import { reviewRequestsCollection } from "@/lib/db/collections";
 import type { ReviewRequestDoc } from "@/lib/db/types";
 import { runReviewPipeline } from "@/lib/review/pipeline";
 import { createProgressReporter } from "@/lib/review/progress-store";
+import { deleteStatusComment, postStatusComment } from "@/lib/review/status-comment";
 import { PrClosedError } from "@/lib/review/errors";
 import { handleRequestFailure } from "@/lib/review/failure";
 import { log, errorFields } from "@/lib/logger";
@@ -89,6 +90,9 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
   }, HEARTBEAT_INTERVAL_MS);
   ticker.unref();
 
+  // Posted before the pipeline starts so the link is live from the first stage.
+  await postStatusComment(request);
+
   try {
     const progress = createProgressReporter(requestId);
     await progress.stage("preparing");
@@ -119,5 +123,7 @@ export async function runReviewRequest(requestId: ObjectId): Promise<void> {
     if (transitioned) await handleRequestFailure(requestId);
   } finally {
     clearInterval(ticker);
+    // After markCompleted/markFailed/markCancelled: the review (or the failure path) owns the PR now.
+    await deleteStatusComment(requestId);
   }
 }

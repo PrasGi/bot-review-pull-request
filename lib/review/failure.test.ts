@@ -59,6 +59,7 @@ function makeDeps() {
     sleep: vi.fn(async () => {}),
     run: vi.fn(async () => {}),
     postComment: vi.fn(async () => {}),
+    deleteStatus: vi.fn(async () => {}),
   };
 }
 
@@ -83,6 +84,9 @@ describe("handleRequestFailure", () => {
     expect(createRetryRequest).toHaveBeenCalledWith(state.request, "auto_retry");
     expect(deps.run).toHaveBeenCalledWith(retryId);
     expect(deps.postComment).not.toHaveBeenCalled();
+    // The failed run's status comment goes before the retry posts its own.
+    expect(deps.deleteStatus).toHaveBeenCalledWith(state.request._id);
+    expect(deps.deleteStatus.mock.invocationCallOrder[0]).toBeLessThan(deps.run.mock.invocationCallOrder[0]!);
   });
 
   it("also retries a failed manual retry once before giving up", async () => {
@@ -99,6 +103,7 @@ describe("handleRequestFailure", () => {
     const outcome = await handleRequestFailure(state.request._id, deps);
 
     expect(outcome).toBe("commented");
+    expect(deps.deleteStatus).toHaveBeenCalledWith(state.request._id);
     expect(createRetryRequest).not.toHaveBeenCalled();
     expect(deps.postComment).toHaveBeenCalledTimes(1);
     const [, body] = deps.postComment.mock.calls[0] as unknown as [ReviewRequestDoc, string];
