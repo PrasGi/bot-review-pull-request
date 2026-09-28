@@ -84,7 +84,7 @@ async function syncInstallationAsOwner(
       removedFromInstallation: { $ne: true },
     },
     {
-      $set: { removedFromInstallation: true, enabled: false, updatedAt: new Date() },
+      $set: { removedFromInstallation: true, updatedAt: new Date() },
     },
   );
 

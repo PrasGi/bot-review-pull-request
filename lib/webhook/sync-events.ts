@@ -33,6 +33,9 @@ async function upsertInstallationFromWebhook(
         accountId: installation.account?.id ?? 0,
         updatedAt: now,
       },
+      // Any event other than deleted/suspend means the installation is live again
+      // (created, unsuspend, new_permissions_accepted, repositories changed).
+      $unset: { suspendedAt: "", deletedAt: "" },
       $setOnInsert: {
         installationId: installation.id,
         repositorySelection: "selected",
@@ -84,7 +87,8 @@ async function markReposRemoved(
   for (const repo of repos) {
     await collection.updateOne(
       { installationId, fullName: repo.full_name },
-      { $set: { removedFromInstallation: true, enabled: false, updatedAt: now } },
+      // `enabled` is the admin's switch; leave it so the repo comes back as it was.
+      { $set: { removedFromInstallation: true, updatedAt: now } },
     );
   }
 }
@@ -110,14 +114,11 @@ export async function handleInstallationEvent(
     const installations = await installationsCollection();
     const now = new Date();
     const field = payload.action === "deleted" ? "deletedAt" : "suspendedAt";
+    // The installation's own flag blocks reviews (lib/webhook/tenant.ts); the
+    // repos keep their switch, so a reinstall or unsuspend restores them as they were.
     await installations.updateOne(
       { installationId },
       { $set: { [field]: now, updatedAt: now } },
-    );
-    const repos = await reposCollection();
-    await repos.updateMany(
-      { installationId },
-      { $set: { enabled: false, updatedAt: now } },
     );
     return;
   }

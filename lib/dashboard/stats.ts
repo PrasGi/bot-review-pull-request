@@ -4,6 +4,7 @@ import {
   aiCallsCollection,
   userConnectionsCollection,
   reposCollection,
+  installationsCollection,
   settingsCollection,
 } from "@/lib/db/collections";
 
@@ -131,11 +132,17 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const repos = await reposCollection();
   const staleCutoff = new Date(Date.now() - REPO_STALE_MS);
+  // Repos keep their switch when the installation is suspended or removed, so
+  // skip those installations: silence there is expected, not a problem.
+  const inactiveInstallationIds = await (await installationsCollection()).distinct("installationId", {
+    $or: [{ suspendedAt: { $exists: true } }, { deletedAt: { $exists: true } }],
+  });
   const staleDocs = await repos
     .find(
       {
         enabled: true,
         removedFromInstallation: { $ne: true },
+        installationId: { $nin: inactiveInstallationIds },
         lastEventAt: { $lt: staleCutoff },
       },
       { projection: { fullName: 1 } },
