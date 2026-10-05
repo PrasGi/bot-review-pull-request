@@ -115,6 +115,47 @@ export interface SubmitReviewResult {
   inlinePosted: boolean;
 }
 
+const GH_ERROR_DETAIL_MAX = 300;
+
+interface GhErrorBody {
+  message?: unknown;
+  errors?: unknown;
+}
+
+/**
+ * Pulls GitHub's own explanation out of an error response ("Validation Failed:
+ * …"), so a rejected review says why instead of only "422". GitHub's error
+ * bodies carry no secrets; the detail is still capped because it is stored and
+ * shown on the dashboard.
+ */
+export function ghErrorDetail(body: string): string {
+  let parsed: GhErrorBody;
+  try {
+    parsed = JSON.parse(body) as GhErrorBody;
+  } catch {
+    return "";
+  }
+  const parts: string[] = [];
+  if (typeof parsed.message === "string") parts.push(parsed.message);
+  if (Array.isArray(parsed.errors)) {
+    for (const e of parsed.errors) {
+      if (typeof e === "string") parts.push(e);
+      else if (e && typeof e === "object" && "message" in e && typeof e.message === "string") {
+        parts.push(e.message);
+      }
+    }
+  }
+  const detail = parts.join(": ").replace(/\s+/g, " ").trim();
+  return detail.length > GH_ERROR_DETAIL_MAX
+    ? `${detail.slice(0, GH_ERROR_DETAIL_MAX - 1)}…`
+    : detail;
+}
+
+function ghFailure(label: string, status: number, body: string): string {
+  const detail = ghErrorDetail(body);
+  return detail ? `${label}: ${status} — ${detail}` : `${label}: ${status}`;
+}
+
 export async function submitReview(
   token: string,
   input: SubmitReviewInput,
@@ -136,8 +177,9 @@ export async function submitReview(
   }
 
   if (withInline.status !== 422) {
-    throw new Error(`submit review failed: ${withInline.status}`);
+    throw new Error(ghFailure("submit review failed", withInline.status, withInline.body));
   }
+  const inlineFailure = ghFailure("inline", withInline.status, withInline.body);
 
   const summaryOnly = await ghRequest<{ id: number }>(path, token, {
     method: "POST",
@@ -148,7 +190,11 @@ export async function submitReview(
     }),
   });
   if (!summaryOnly.ok) {
-    throw new Error(`submit review (summary fallback) failed: ${summaryOnly.status}`);
+    // Both attempts are named: when the fallback fails for a different reason
+    // than the inline attempt, the first reason is the one worth fixing.
+    throw new Error(
+      `${ghFailure("submit review (summary fallback) failed", summaryOnly.status, summaryOnly.body)} (${inlineFailure})`,
+    );
   }
   return { githubReviewId: summaryOnly.data.id, inlinePosted: false };
 }
