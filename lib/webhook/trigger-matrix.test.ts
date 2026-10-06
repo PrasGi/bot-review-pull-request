@@ -50,6 +50,15 @@ const reviewer = {
   updatedAt: new Date(),
 };
 
+// Draft-skipped requests the ready_for_review lookup returns, newest first.
+let skippedDrafts: { userConnectionId: ObjectId }[] = [];
+const insertRequest = vi.fn<(doc: unknown) => Promise<{ acknowledged: boolean }>>(
+  async () => ({ acknowledged: true }),
+);
+const updateRequests = vi.fn<(filter: unknown, update: unknown) => Promise<{ modifiedCount: number }>>(
+  async () => ({ modifiedCount: 0 }),
+);
+
 vi.mock("@/lib/db/collections", () => ({
   installationsCollection: async () => ({
     findOne: async () => installation,
@@ -59,14 +68,19 @@ vi.mock("@/lib/db/collections", () => ({
     updateOne: async () => ({ modifiedCount: 1 }),
   }),
   userConnectionsCollection: async () => ({
-    findOne: async (query: { githubUserId?: number }) =>
-      query.githubUserId === REVIEWER_ID ? reviewer : null,
+    findOne: async (query: { githubUserId?: number; _id?: ObjectId }) =>
+      query.githubUserId === REVIEWER_ID || query._id?.equals(reviewer._id)
+        ? reviewer
+        : null,
   }),
   reviewRequestsCollection: async () => ({
     findOne: async () => null,
-    insertOne: async () => ({ acknowledged: true }),
+    find: () => ({
+      sort: () => ({ toArray: async () => skippedDrafts }),
+    }),
+    insertOne: insertRequest,
     updateOne: async () => ({ modifiedCount: 0 }),
-    updateMany: async () => ({ modifiedCount: 0 }),
+    updateMany: updateRequests,
   }),
   reviewsCollection: async () => ({
     findOne: async () => null,
@@ -99,7 +113,10 @@ function makeEvent(overrides: Partial<PullRequestEvent> = {}): PullRequestEvent 
 }
 
 describe("evaluatePullRequestEvent", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    skippedDrafts = [];
+  });
 
   it("queues a review when the reviewer matches and PR is ready", async () => {
     const { evaluatePullRequestEvent } = await import(
@@ -143,5 +160,84 @@ describe("evaluatePullRequestEvent", () => {
       "d4",
     );
     expect(outcome.status).toBe("ignored");
+  });
+});
+
+describe("evaluatePullRequestEvent — ready_for_review", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    skippedDrafts = [];
+  });
+
+  // GitHub's ready_for_review payload carries no requested_reviewer.
+  const readyEvent = (requested?: { id: number; login: string }[]) =>
+    makeEvent({
+      action: "ready_for_review",
+      requested_reviewer: undefined,
+      pull_request: {
+        ...makeEvent().pull_request,
+        ...(requested ? { requested_reviewers: requested } : {}),
+      },
+    });
+
+  it("queues the review that was skipped while the PR was a draft", async () => {
+    const { evaluatePullRequestEvent } = await import(
+      "@/lib/webhook/trigger-matrix"
+    );
+    skippedDrafts = [{ userConnectionId: reviewer._id }];
+
+    const outcome = await evaluatePullRequestEvent(
+      readyEvent([{ id: REVIEWER_ID, login: "PrasGi" }]),
+      "d5",
+    );
+
+    expect(outcome.status).toBe("queued");
+    expect(insertRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trigger: "ready_for_review",
+        status: "queued",
+        userConnectionId: reviewer._id,
+      }),
+    );
+  });
+
+  it("resumes a draft skip only once", async () => {
+    const { evaluatePullRequestEvent } = await import(
+      "@/lib/webhook/trigger-matrix"
+    );
+    skippedDrafts = [{ userConnectionId: reviewer._id }];
+
+    await evaluatePullRequestEvent(readyEvent(), "d6");
+
+    expect(updateRequests).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "skipped_draft", draftResumedAt: { $exists: false } }),
+      { $set: { draftResumedAt: expect.any(Date) } },
+    );
+  });
+
+  it("ignores a PR that was never skipped as a draft", async () => {
+    const { evaluatePullRequestEvent } = await import(
+      "@/lib/webhook/trigger-matrix"
+    );
+
+    const outcome = await evaluatePullRequestEvent(readyEvent(), "d7");
+
+    expect(outcome).toEqual({ status: "ignored", reason: "no_prior_draft_skip" });
+    expect(insertRequest).not.toHaveBeenCalled();
+  });
+
+  it("ignores a reviewer whose request was removed before the PR was ready", async () => {
+    const { evaluatePullRequestEvent } = await import(
+      "@/lib/webhook/trigger-matrix"
+    );
+    skippedDrafts = [{ userConnectionId: reviewer._id }];
+
+    const outcome = await evaluatePullRequestEvent(
+      readyEvent([{ id: 222222, login: "someone-else" }]),
+      "d8",
+    );
+
+    expect(outcome).toEqual({ status: "ignored", reason: "reviewer_no_longer_requested" });
+    expect(insertRequest).not.toHaveBeenCalled();
   });
 });

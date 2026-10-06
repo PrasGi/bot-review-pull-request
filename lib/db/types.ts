@@ -215,6 +215,8 @@ export interface ReviewRequestDoc {
   error?: ReviewRequestError;
   newerCommitsFlag?: boolean;
   reReviewRequestedFlag?: boolean;
+  /** On a `skipped_draft` request: set when ready_for_review queued its review, so it runs once. */
+  draftResumedAt?: Date;
   /** Set once the "review could not be completed" comment was posted on the PR. */
   failureNotifiedAt?: Date;
   stats?: ReviewRequestStats;

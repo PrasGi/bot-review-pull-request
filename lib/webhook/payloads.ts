@@ -28,6 +28,8 @@ export interface WebhookPullRequest {
   user: WebhookUser;
   head: { sha: string; ref: string };
   base: { sha: string; ref: string };
+  /** Users whose review is still pending. Teams are listed separately and not used. */
+  requested_reviewers?: WebhookUser[];
 }
 
 export interface PullRequestEvent {
