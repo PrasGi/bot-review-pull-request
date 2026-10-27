@@ -144,12 +144,17 @@ async function resolveReviewScope(params: {
 
   if (request.kind !== "re_review") return full("initial", null);
 
+  // A no-op run posts nothing and carries no findings, so it must not stand in
+  // for the review the author is answering.
   const reviews = await reviewsCollection();
   const prev = await reviews.findOne(
-    { repoId: request.repoId, prNumber: request.prNumber },
+    { repoId: request.repoId, prNumber: request.prNumber, noop: { $ne: true } },
     { sort: { submittedAt: -1 } },
   );
   if (!prev || !prev.lastReviewedSha) return full("re_review_fallback_full", null);
+  // A retry from the dashboard asks for a fresh look at the whole PR, even when
+  // nothing changed since the last review.
+  if (request.trigger === "manual_retry") return full("re_review_fallback_full", prev);
   if (prev.lastReviewedSha === headSha) {
     if (hasPullRequestMetadataChanged(prev, { title: prTitle, body: prBody })) {
       return full("re_review", prev);
@@ -266,9 +271,9 @@ async function runReplyReview(params: {
     templateVersion: TEMPLATE_VERSION,
     prompt: evaluation.prompt,
     response: evaluation.response,
-    usage: { promptTokens: 0, completionTokens: 0 },
-    costUsd: 0,
-    latencyMs: 0,
+    usage: evaluation.usage,
+    costUsd: computeCostUsd(evaluation.usage, params.pricing),
+    latencyMs: evaluation.latencyMs,
     status: "ok",
   });
 

@@ -4,10 +4,12 @@ const API_BASE = "https://api.github.com";
 
 export type CompareOutcome =
   | { ok: true; files: PrFile[]; status: string }
-  | { ok: false; reason: "unreachable" | "diverged" | "error" };
+  | { ok: false; reason: "unreachable" | "diverged" | "merged_base" | "error" };
 
 interface CompareApiResponse {
   status: string;
+  total_commits?: number;
+  commits?: { parents?: unknown[] }[];
   files?: PrFile[];
 }
 
@@ -35,6 +37,16 @@ export async function fetchCompare(
 
   const data = (await res.json()) as CompareApiResponse;
   if (data.status === "diverged") return { ok: false, reason: "diverged" };
+  // A merge commit in the range (e.g. `main` merged into the PR branch) brings the
+  // other branch's changes into the diff, so it no longer shows only the PR's own
+  // work. A truncated commit list cannot be checked, so it is treated the same way.
+  const commits = data.commits ?? [];
+  if (
+    commits.length < (data.total_commits ?? commits.length) ||
+    commits.some((commit) => (commit.parents?.length ?? 0) > 1)
+  ) {
+    return { ok: false, reason: "merged_base" };
+  }
 
   return { ok: true, files: data.files ?? [], status: data.status };
 }

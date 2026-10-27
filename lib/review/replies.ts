@@ -5,7 +5,7 @@ import type {
   Verdict,
   VerdictForcedReason,
 } from "@/lib/db/types";
-import type { AIProvider } from "@/lib/ai/provider";
+import type { AIProvider, AIUsage } from "@/lib/ai/provider";
 import { stripJsonFences } from "@/lib/ai/provider";
 import type { ReviewComment } from "@/lib/github/replies";
 import {
@@ -100,7 +100,13 @@ export async function evaluateReplies(params: {
   prIntentExplanation: string;
   provider: AIProvider;
   model: string;
-}): Promise<{ statuses: PreviousFindingStatus[]; prompt: string; response: string }> {
+}): Promise<{
+  statuses: PreviousFindingStatus[];
+  prompt: string;
+  response: string;
+  usage: AIUsage;
+  latencyMs: number;
+}> {
   const { bundles, prTitle, prIntentExplanation, provider, model } = params;
 
   const evalFindings: ReplyEvalFinding[] = bundles.map((b) => ({
@@ -120,6 +126,7 @@ export async function evaluateReplies(params: {
   );
   const prompt = messages.map((m) => `[${m.role}]\n${m.content}`).join("\n\n");
 
+  const started = Date.now();
   const completion = await provider.complete({
     model,
     messages,
@@ -129,7 +136,13 @@ export async function evaluateReplies(params: {
   });
 
   const statuses = parseReplyEval(completion.text, bundles);
-  return { statuses, prompt, response: completion.text };
+  return {
+    statuses,
+    prompt,
+    response: completion.text,
+    usage: completion.usage,
+    latencyMs: Date.now() - started,
+  };
 }
 
 function parseReplyEval(

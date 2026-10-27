@@ -150,13 +150,13 @@ describe("computeReplyVerdict", () => {
   });
 });
 
-function fakeProvider(responseText: string): AIProvider {
+function fakeProvider(
+  responseText: string,
+  usage = { promptTokens: 0, completionTokens: 0 },
+): AIProvider {
   return {
     name: "glm",
-    complete: async () => ({
-      text: responseText,
-      usage: { promptTokens: 0, completionTokens: 0 },
-    }),
+    complete: async () => ({ text: responseText, usage }),
   };
 }
 
@@ -183,6 +183,21 @@ describe("evaluateReplies", () => {
       model: "glm-4.6",
     });
     expect(statuses[0]?.status).toBe("unresolved");
+  });
+
+  it("returns the provider's token usage so the call can be costed", async () => {
+    const provider = fakeProvider(
+      '{"results":[{"index":0,"status":"resolved","note":"fixed"}]}',
+      { promptTokens: 1200, completionTokens: 80 },
+    );
+    const { usage } = await evaluateReplies({
+      bundles,
+      prTitle: "feat",
+      prIntentExplanation: "",
+      provider,
+      model: "glm-4.6",
+    });
+    expect(usage).toEqual({ promptTokens: 1200, completionTokens: 80 });
   });
 
   it("falls back to not_determinable on unparseable AI output", async () => {
