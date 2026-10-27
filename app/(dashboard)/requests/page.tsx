@@ -34,6 +34,7 @@ type RequestListItem = {
   finishedAt?: string;
   durationMs?: number;
   verdict?: string;
+  skipped?: boolean;
   costUsd: number;
 };
 
@@ -146,7 +147,9 @@ const COLUMNS: Column<RequestListItem>[] = [
     key: 'verdict',
     header: 'Verdict',
     render: (item) =>
-      item.verdict ? (
+      item.skipped ? (
+        <Badge variant="neutral">skipped</Badge>
+      ) : item.verdict ? (
         <Badge variant={verdictTone(item.verdict)}>{item.verdict}</Badge>
       ) : (
         <span className="prr-hint">—</span>

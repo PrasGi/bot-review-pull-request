@@ -45,6 +45,7 @@ type IntentMatch = {
 
 type ReviewDoc = {
   verdict: Verdict;
+  noop?: boolean;
   verdictForced?: string;
   confidence: number;
   summary: string;
@@ -346,7 +347,11 @@ export default function RequestDetailPage(): React.ReactElement {
             action={<code className={styles.confidence}>{Math.round(review.confidence * 100)}% confidence</code>}
           >
             AI review
-            <Badge variant={verdictTone(review.verdict)}>{review.verdict}</Badge>
+            {review.noop ? (
+              <Badge variant="neutral">skipped</Badge>
+            ) : (
+              <Badge variant={verdictTone(review.verdict)}>{review.verdict}</Badge>
+            )}
             {review.verdictForced && <Badge variant="warning">forced: {review.verdictForced}</Badge>}
           </SectionHeading>
 

@@ -28,6 +28,8 @@ export interface RequestListItem {
   finishedAt?: string;
   durationMs?: number;
   verdict?: string;
+  /** The run found nothing new to review and posted nothing to GitHub. */
+  skipped?: boolean;
   costUsd: number;
 }
 
@@ -79,10 +81,13 @@ export async function listRequests(
   const requestIds = docs.map((d) => d._id);
   const verdicts = await reviews
     .find({ requestId: { $in: requestIds } })
-    .project({ requestId: 1, verdict: 1 })
+    .project({ requestId: 1, verdict: 1, noop: 1 })
     .toArray();
   const verdictByReq = new Map(
     verdicts.map((v) => [v.requestId.toHexString(), v.verdict as string]),
+  );
+  const skippedReqs = new Set(
+    verdicts.filter((v) => v.noop === true).map((v) => v.requestId.toHexString()),
   );
   const costAgg = await aiCalls
     .aggregate<{ _id: ObjectId; total: number }>([
@@ -113,6 +118,7 @@ export async function listRequests(
     ...(verdictByReq.has(d._id.toHexString())
       ? { verdict: verdictByReq.get(d._id.toHexString()) }
       : {}),
+    ...(skippedReqs.has(d._id.toHexString()) ? { skipped: true } : {}),
     costUsd: costByReq.get(d._id.toHexString()) ?? 0,
   }));
 
