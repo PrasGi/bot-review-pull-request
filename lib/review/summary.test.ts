@@ -133,6 +133,26 @@ describe("buildReviewBody", () => {
     expect(body).toContain("const x = useMemo(() => compute(), [dep]);");
   });
 
+  it("warns about an incomplete read before the summary and names the unread files", () => {
+    const body = buildReviewBody({
+      verdict: "COMMENT",
+      summary: "Docs-only hunk that matches the PR intent.",
+      incomplete: "chunk_failed",
+      partial: {
+        totalFiles: 9,
+        reviewedCount: 1,
+        skippedFiles: ["src/knowledge-entries.service.ts", "src/facade-tools.ts"],
+      },
+      newerCommits: false,
+      shortSha: "abc1234",
+    });
+
+    expect(body).toContain("I read 1 of 9 files, and the summary below covers only those.");
+    expect(body).toContain("> Not reviewed: `src/knowledge-entries.service.ts`, `src/facade-tools.ts`.");
+    expect(body.indexOf("Incomplete read")).toBeLessThan(body.indexOf("Docs-only hunk"));
+    expect(body.indexOf("Not reviewed")).toBeLessThan(body.indexOf("Docs-only hunk"));
+  });
+
   it("omits the non-blocking section when there are no non-blocking findings", () => {
     const body = buildReviewBody({
       verdict: "APPROVE",

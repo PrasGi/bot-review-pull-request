@@ -60,6 +60,7 @@ import {
 } from "@/lib/review/verdict";
 import { applyScopeGuard, collectRemovedLines } from "@/lib/review/scope-guard";
 import { mapWithConcurrency } from "@/lib/review/concurrency";
+import { computeReadCoverage } from "@/lib/review/coverage";
 import { resolveReviewProfile } from "@/lib/review/profile";
 import { PrClosedError } from "@/lib/review/errors";
 import { log } from "@/lib/logger";
@@ -561,8 +562,8 @@ export async function runReviewPipeline(
     });
     const messages = buildMessages(systemPrompt, userPrompt);
 
-    try {
-      return await completeChunkWithRepair({
+    const review = (): Promise<ParsedChunk> =>
+      completeChunkWithRepair({
         provider: instance,
         completionParams: {
           model,
@@ -596,6 +597,25 @@ export async function runReviewPipeline(
           });
         },
       });
+
+    try {
+      try {
+        return await review();
+      } catch (error) {
+        // A failed chunk drops its files from the review, so it gets one more
+        // attempt when that attempt can still finish before the global deadline.
+        // GLM times out rarely (2 of ~1,000 chunk calls in 30 days), but each
+        // time it cost a whole chunk of the PR.
+        if (Date.now() + CALL_TIMEOUT_MS > pipelineStart + GLOBAL_DEADLINE_MS) {
+          throw error;
+        }
+        log.warn("review.chunk_retry", {
+          requestId: request._id.toHexString(),
+          chunk: index + 1,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return await review();
+      }
     } catch (error) {
       throw new Error(
         `chunk ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
@@ -714,19 +734,18 @@ export async function runReviewPipeline(
     chunkSummaries,
   });
 
-  const skippedForBudget = [
-    ...unreviewed.map((f) => f.filename),
-    ...(partialCoverage
-      ? ["(some files skipped after a chunk timed out)"]
-      : []),
-  ];
-  const reviewedCount = kept.length - unreviewed.length;
+  const coverage = computeReadCoverage({
+    totalFiles: kept.length,
+    overBudget: unreviewed.map((f) => f.filename),
+    chunkFiles: chunks.map((chunk) => chunk.files.map((file) => file.filename)),
+    settled,
+  });
   const partial =
-    skippedForBudget.length > 0
+    coverage.unreadFiles.length > 0
       ? {
           totalFiles: kept.length,
-          reviewedCount,
-          skippedFiles: skippedForBudget,
+          reviewedCount: coverage.reviewedCount,
+          skippedFiles: coverage.unreadFiles,
         }
       : undefined;
 

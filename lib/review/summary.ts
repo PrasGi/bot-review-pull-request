@@ -112,19 +112,13 @@ export interface SummaryInput {
 }
 
 export function buildReviewBody(input: SummaryInput): string {
-  const parts: string[] = [
-    `**${VERDICT_BANNER[input.verdict]}**`,
-    "",
-    input.summary,
-  ];
+  const parts: string[] = [`**${VERDICT_BANNER[input.verdict]}**`];
 
-  if (input.caveat) {
-    parts.push("", `> ⚠️ ${input.caveat}`);
-  }
-
+  // The coverage warning comes before the summary: a summary written from part of
+  // the diff otherwise reads as a verdict on the whole PR.
   if (input.incomplete) {
     const covered = input.partial
-      ? ` I read ${input.partial.reviewedCount} of ${input.partial.totalFiles} files.`
+      ? ` I read ${input.partial.reviewedCount} of ${input.partial.totalFiles} files, and the summary below covers only those.`
       : "";
     parts.push(
       "",
@@ -143,6 +137,12 @@ export function buildReviewBody(input: SummaryInput): string {
       "",
       `> Not reviewed: ${shown.map((f) => `\`${f}\``).join(", ")}${more}.`,
     );
+  }
+
+  parts.push("", input.summary);
+
+  if (input.caveat) {
+    parts.push("", `> ⚠️ ${input.caveat}`);
   }
 
   if (input.newerCommits) {
